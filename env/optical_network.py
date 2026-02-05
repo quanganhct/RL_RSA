@@ -116,19 +116,28 @@ class Lightpath:
         self.starting_slot = None
         self.eligible_modulation = self.compute_modulation(network)
         self.nb_slot = None
-        self.modulation = None
+        self.modulation: Modulation = None
+        self.bandwidth: float = None
         self.snr_threshold = None
+        self.G = 4 * 1e-11          #power spectral density in mW/Hz
 
     '''
     Return all eligible modulation and number of slots needed
-    @return: [(modulation1, nb_slot), ...]
+    @return: {
+        modulation: (nb_slot, bandwidth)
+    }
     '''
     def compute_modulation(self, network: Network):
         reach = sum([network.map_link[link_id].link_length for link_id in self.path.link_ids])
         modulations = get_eligible_modulation(reach)
         data_rate = self.request.data_rate
-        result = dict([(modulation, int(math.ceil(data_rate/(modulation.value * 12.5))) + 1) \
-                  for modulation in modulations])
+        result = {}
+        
+        for modulation in modulations:
+            baud_rate = data_rate/modulation.value
+            bandwidth = baud_rate * (1 + constant.roll_off_factor)
+            nb_slot = math.ceil(bandwidth/12.5) + 1
+            result[modulation] = (nb_slot, bandwidth)
         return result
 
     def set_modulation(self, modulation: Modulation):
@@ -136,9 +145,10 @@ class Lightpath:
             raise NonEligibleModulation("Non eligible modulation. Check @eligible_modulation for proper modulation format")
         
         self.modulation = modulation
-        self.nb_slot = self.eligible_modulation[modulation]
+        self.nb_slot, self.bandwidth = self.eligible_modulation[modulation]
+        
         # actual bandwidth used is nb_slot - 1, we should remove 1 from guardband
-        self.snr_threshold = 2**(self.request.data_rate/((self.nb_slot-1) * 12.5))
+        self.snr_threshold = 2**(self.request.data_rate/self.bandwidth)
 
     def set_start_time(self, start_time):
         self.start_time = start_time
@@ -184,6 +194,7 @@ class Network(nx.DiGraph):
         self.shortest_path_pool: dict[(int, int), list[Path]] = {}
         self.sorted_request_list: list[Request] = []
         self.waiting_request: list[Request] = []
+        self.routing_lightpath: list[Lightpath] = []
 
     def reset_id():
         Request.static_id = 0
@@ -248,6 +259,8 @@ class Network(nx.DiGraph):
         for link_id in lightpath.path.link_ids:
             for slot in range(lightpath.starting_slot, lightpath.starting_slot+lightpath.nb_slot):
                 self.map_link_slot[link_id][slot] = None
+        
+        self.routing_lightpath.remove(lightpath)
 
     def route_lightpath(self, lightpath: Lightpath, starting_slot: int):
         if lightpath.modulation is None:
@@ -261,6 +274,8 @@ class Network(nx.DiGraph):
         
         lightpath.starting_slot = starting_slot
         lightpath.set_start_time(self.clock)
+        self.routing_lightpath.append(lightpath)
+
         for link_id in lightpath.path.link_ids:
             for slot in range(starting_slot, starting_slot + lightpath.nb_slot):
                 self.map_link_slot[link_id][slot] = lightpath.id
@@ -292,6 +307,30 @@ class Network(nx.DiGraph):
 
         self.clock += 1
         return self.waiting_request
+    
+    def compute_XCI(self, lp1: Lightpath, starting_slot: int , lp2: Lightpath):
+        set_link1 = set(lp1.path.link_ids)
+        set_link2 = set(lp2.path.link_ids)
+        intersection = set_link1.intersection(set_link2)
+        if len(intersection) == 0:
+            return 0
+        
+        lp2_end_slot = lp2.starting_slot + lp2.nb_slot
+        lp1_end_slot = starting_slot + lp1.nb_slot
+
+        if starting_slot <= lp1.starting_slot <= lp1_end_slot or \
+            starting_slot <= lp2_end_slot <= lp1_end_slot:
+            raise ConflictSlot("Lightpath %s and lightpath %s have conflict slots"%(lp1.id, lp2.id))
+
+        nb_shared_span = sum([math.ceil(self.map_link[id].link_length/constant.fiber_span) for id in intersection])
+        lp1_f_center = starting_slot + lp1.nb_slot/2
+        lp2_f_center = lp2.starting_slot + lp2.nb_slot/2
+
+        delta_fcenter = abs(lp1_f_center - lp2_f_center)
+        coeff_XCI = (16/27) * constant.gamma**2 * constant.L_eff**2 * constant.alpha / (math.pi * constant.beta2)
+        eta_XCI = coeff_XCI * np.log(abs(delta_fcenter + lp2.bandwidth/2)/abs(delta_fcenter - lp2.bandwidth/2))
+        G_XCI = nb_shared_span * lp1.G * lp2.G**2 * eta_XCI
+        return G_XCI
         
     def compute_SNR(self, lightpath:Lightpath, starting_slot: int):
         nb_spans = sum([math.ceil(self.map_link[id].link_length/constant.fiber_span) for id in lightpath.path.link_ids])
@@ -300,4 +339,19 @@ class Network(nx.DiGraph):
         G_ASE = nb_spans * constant.n_sp * np.e**(2 * constant.alpha * constant.fiber_span) \
             * constant.h * fcenter
 
+
+        arg = (np.pi**2 / 2) * constant.beta2 * (1/(2 * constant.alpha)) * lightpath.bandwidth**2
+        eta_SCI = (16/27) * constant.gamma**2 * constant.L_eff**2 * constant.alpha / (math.pi * constant.beta2) \
+            * np.arcsinh(arg)
+        
+        G_SCI = nb_spans * lightpath.G**3 * eta_SCI
+        G_XCI = 0
+        for lp in self.routing_lightpath:
+            try:
+                G_XCI += self.compute_XCI(lightpath, starting_slot, lp)
+            except ConflictSlot as e:
+                #Handle conflict slot here
+                raise e
+
+        return lightpath.G / (G_ASE + G_SCI + G_XCI)
         
