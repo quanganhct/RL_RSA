@@ -36,7 +36,7 @@ class Request:
     if not granted, request will be denied
     @data_rate: data rate in Gbps
     '''
-    def __init__(self, start: int, end: int, data_rate, start_time, holding_time, delay_limit, nb_slot = None):
+    def __init__(self, start: int, end: int, data_rate, start_time, holding_time, delay_limit=3, nb_slot = None):
         self.start = start
         self.end = end
         self.data_rate = data_rate
