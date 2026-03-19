@@ -7,7 +7,7 @@ import gym
 import networkx as nx
 import numpy as np
 
-from optical_rl_gym.utils import Service
+from custom_env.optical_rl_gym.utils import Service
 
 
 class OpticalNetworkEnv(gym.Env):

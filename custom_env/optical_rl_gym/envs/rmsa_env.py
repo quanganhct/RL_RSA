@@ -10,7 +10,7 @@ import gym
 import networkx as nx
 import numpy as np
 
-from optical_rl_gym.utils import Path, Service
+from custom_env.optical_rl_gym.utils import Path, Service
 
 from .optical_network_env import OpticalNetworkEnv
 
@@ -83,7 +83,7 @@ class RMSAEnv(OpticalNetworkEnv):
 
             # creating a partial function for the bit rate continuous selection
             self.bit_rate_function = functools.partial(
-                self.rng.randint, self.bit_rate_lower_bound, self.bit_rate_higher_bound
+                self.rng.randint, math.ceil(self.bit_rate_lower_bound), math.floor(self.bit_rate_higher_bound)
             )
         elif self.bit_rate_selection == "discrete":
             if bit_rate_probabilities is None:
