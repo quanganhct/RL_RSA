@@ -87,7 +87,7 @@ class GNNEncoder(nn.Module):
         e = self.edge_proj(edge_feat)         # [E, d_h]
 
         src, dst = edge_index                 # [E], [E]
-
+        
         # Message passing iterations with 3 hops messages
         for _ in range(3):
 

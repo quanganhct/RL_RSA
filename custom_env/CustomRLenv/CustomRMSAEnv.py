@@ -10,6 +10,8 @@ import networkx as nx
 from custom_env.optical_rl_gym.envs.rmsa_env import RMSAEnv
 import math
 
+from custom_env.CustomRLenv.utils import Path, Modulation, Service
+
 class CustomRMSAEnv(RMSAEnv):
     """
     Custom RMSA Environment with:
@@ -26,6 +28,10 @@ class CustomRMSAEnv(RMSAEnv):
         self.num_nodes = self.topology.number_of_nodes()
         self.node_betweenness = nx.betweenness_centrality(self.topology)
         self._update_candidate_paths()
+
+        # In case of alpha shortest path, @max_num_path is the maximum path per pair nodes, and it is 
+        # k_paths in case of k shortest path
+        self.max_num_path = self.topology.graph["max_numpath"]
 
     # -----------------------------
     # Node feature vector x_v
@@ -63,6 +69,7 @@ class CustomRMSAEnv(RMSAEnv):
         self.candidate_paths_minimum_osnr = {}
         self.candidate_paths_inband_xt = {}
         self.candidate_paths_impairment = {}
+
         
         for src_dst, paths in self.k_shortest_paths.items():
             src = src_dst[0]
@@ -74,9 +81,10 @@ class CustomRMSAEnv(RMSAEnv):
             candidate_p_inband_xt = []
             candidate_p_impairment = []
         
-            for i in range(self.k_paths):
-                path = self.topology.graph['ksp'][(src, dst)][i].node_list
-                path = self.k_shortest_paths[(src, dst)][i].node_list
+            for i in range(len(self.topology.graph['ksp'][(src, dst)])):
+                pobj: Path = self.k_shortest_paths[(src, dst)][i]
+                path = pobj.node_list
+                # path = self.k_shortest_paths[(src, dst)][i].node_list
                 path = self._path_to_edges(path)
                 path_link_id = []
                 for j , p in enumerate(path):
@@ -104,7 +112,7 @@ class CustomRMSAEnv(RMSAEnv):
      
     def get_candidate_paths(self):
         if not hasattr(self, "current_service"):
-            return [np.zeros(1) for i in range(self.k_paths)]
+            return [np.zeros(1) for i in range(self.max_num_path)]
 
         src = self.current_service.source
         dst = self.current_service.destination
@@ -113,7 +121,7 @@ class CustomRMSAEnv(RMSAEnv):
     
     def get_candidate_paths_length(self):
         if not hasattr(self, "current_service"):
-            return  [0 for i in range(self.k_paths)]
+            return  [0 for i in range(self.max_num_path)]
 
         src = self.current_service.source
         dst = self.current_service.destination
@@ -122,7 +130,7 @@ class CustomRMSAEnv(RMSAEnv):
     
     def get_candidate_paths_hops(self):
         if not hasattr(self, "current_service"):
-            return [1 for i in range(self.k_paths)]
+            return [1 for i in range(self.max_num_path)]
 
         src = self.current_service.source
         dst = self.current_service.destination
@@ -131,7 +139,7 @@ class CustomRMSAEnv(RMSAEnv):
     
     def get_candidate_paths_minimum_osnr(self):
         if not hasattr(self, "current_service"):
-            return [0 for i in range(self.k_paths)]
+            return [0 for i in range(self.max_num_path)]
 
         src = self.current_service.source
         dst = self.current_service.destination
@@ -140,7 +148,7 @@ class CustomRMSAEnv(RMSAEnv):
     
     def get_candidate_paths_inband_xt(self):
         if not hasattr(self, "current_service"):
-            return [0 for i in range(self.k_paths)]
+            return [0 for i in range(self.max_num_path)]
 
         src = self.current_service.source
         dst = self.current_service.destination
@@ -149,7 +157,7 @@ class CustomRMSAEnv(RMSAEnv):
     
     def get_candidate_paths_impairment(self):
         if not hasattr(self, "current_service"):
-            return [[0,0,0] for i in range(self.k_paths)]
+            return [[0,0,0] for i in range(self.max_num_path)]
 
         src = self.current_service.source
         dst = self.current_service.destination
@@ -261,7 +269,118 @@ class CustomRMSAEnv(RMSAEnv):
     # Custom step to update features
     # -----------------------------
     def step(self, action):
-        next_state, reward, done, info = super().step(action)
+        path, initial_slot = action[0], action[1]
+        src, dest = self.current_service.source, self.current_service.destination
+        num_path = len(self.k_shortest_paths[src, dest])
+        # registering overall statistics
+        self.actions_output[path, initial_slot] += 1
+        previous_network_compactness = (
+            self._get_network_compactness()
+        )  # used for compactness difference measure
+
+        # starting the service as rejected
+        self.current_service.accepted = False
+        if (
+            path < num_path and initial_slot < self.num_spectrum_resources
+        ):  # action is for assigning a path
+            slots = self.get_number_slots(
+                self.k_shortest_paths[src, dest][path]
+            )
+            self.logger.debug(
+                "{} processing action {} path {} and initial slot {} for {} slots".format(
+                    self.current_service.service_id, action, path, initial_slot, slots
+                )
+            )
+            if self.is_path_free(
+                self.k_shortest_paths[src, dest][path],
+                initial_slot,
+                slots,
+            ):
+                self._provision_path(
+                    self.k_shortest_paths[src, dest][path],
+                    initial_slot,
+                    slots,
+                )
+                self.current_service.accepted = True
+                self.actions_taken[path, initial_slot] += 1
+                if (
+                    self.bit_rate_selection == "discrete"
+                ):  # if discrete bit rate is being used
+                    self.slots_provisioned_histogram[
+                        slots
+                    ] += 1  # populate the histogram of bit rates
+                self._add_release(self.current_service)
+
+        if not self.current_service.accepted:
+            self.actions_taken[self.max_num_path, self.num_spectrum_resources] += 1
+
+        self.topology.graph["services"].append(self.current_service)
+
+        # generating statistics for the episode info
+        if self.bit_rate_selection == "discrete":
+            blocking_per_bit_rate = {}
+            for bit_rate in self.bit_rates:
+                if self.bit_rate_requested_histogram[bit_rate] > 0:
+                    # computing the blocking rate per bit rate requested in the increasing order of bit rate
+                    blocking_per_bit_rate[bit_rate] = (
+                        self.bit_rate_requested_histogram[bit_rate]
+                        - self.bit_rate_provisioned_histogram[bit_rate]
+                    ) / self.bit_rate_requested_histogram[bit_rate]
+                else:
+                    blocking_per_bit_rate[bit_rate] = 0.0
+
+        cur_network_compactness = (
+            self._get_network_compactness()
+        )  # measuring compactness after the provisioning
+
+        reward = self.reward()
+        info = {
+            "service_blocking_rate": (self.services_processed - self.services_accepted)
+            / self.services_processed,
+            "episode_service_blocking_rate": (
+                self.episode_services_processed - self.episode_services_accepted
+            )
+            / self.episode_services_processed,
+            "bit_rate_blocking_rate": (
+                self.bit_rate_requested - self.bit_rate_provisioned
+            )
+            / self.bit_rate_requested,
+            "episode_bit_rate_blocking_rate": (
+                self.episode_bit_rate_requested - self.episode_bit_rate_provisioned
+            )
+            / self.episode_bit_rate_requested,
+            "network_compactness": cur_network_compactness,
+            "network_compactness_difference": previous_network_compactness
+            - cur_network_compactness,
+            "avg_link_compactness": np.mean(
+                [
+                    self.topology[lnk[0]][lnk[1]]["compactness"]
+                    for lnk in self.topology.edges()
+                ]
+            ),
+            "avg_link_utilization": np.mean(
+                [
+                    self.topology[lnk[0]][lnk[1]]["utilization"]
+                    for lnk in self.topology.edges()
+                ]
+            ),
+        }
+
+        # informing the blocking rate per bit rate
+        # sorting by the bit rate to match the previous computation
+        if self.bit_rate_selection == "discrete":
+            for bit_rate, blocking in blocking_per_bit_rate.items():
+                info[f"bit_rate_blocking_{bit_rate}"] = blocking
+            info["fairness"] = max(blocking_per_bit_rate.values()) - min(
+                blocking_per_bit_rate.values()
+            )
+
+        self._new_service = False
+        self._next_service()
+         
+
+        next_state, reward, done, info = self.observation(), reward, \
+                self.episode_services_processed == self.episode_length, info
 
         # Update node & edge features 
         # print(f'src = {self.current_service.source_id} , dst = {self.current_service.destination_id}')

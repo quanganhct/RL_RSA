@@ -123,7 +123,8 @@ def train():
     # with open(f'optical_rl/examples/topologies/nsfnet_chen_5-paths_6-modulations.h5', 'rb') as f:
     #    topology = pickle.load(f)
 
-    topology = get_topology('./data/nsf/nsfnet_chen.txt', 'NSFNET')
+    topology = get_topology(f'./data/germany/sndlib_germany.txt', 'Germany', sndformat=True)
+    # topology = get_topology('./data/nsf/nsfnet_chen.txt', 'NSFNET')
 
     # Environment arguments for the simulation
     env_args = dict(topology=topology, 

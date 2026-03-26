@@ -1,5 +1,7 @@
 import networkx as nx
 import numpy as np
+import math 
+import re
 
 from itertools import islice
 from dataclasses import dataclass, field
@@ -101,8 +103,22 @@ modulations = (
     ),
 )
 
+def distance(origin, destination):
+    lat1, lon1 = origin
+    lat2, lon2 = destination
+    radius = 6371 # km
 
-def read_txt_file(file):
+    dlat = math.radians(lat2-lat1)
+    dlon = math.radians(lon2-lon1)
+    a = math.sin(dlat/2) * math.sin(dlat/2) + math.cos(math.radians(lat1)) \
+        * math.cos(math.radians(lat2)) * math.sin(dlon/2) * math.sin(dlon/2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    d = radius * c
+
+    return d
+
+
+def read_txt_file(file, undirected_file=True):
     graph = nx.DiGraph()
     num_nodes = 0
     num_links = 0
@@ -129,20 +145,91 @@ def read_txt_file(file):
                 )
                 id_link += 1
 
-                graph.add_edge(
-                    info[1],
-                    info[0],
-                    id=id_link,
-                    index=id_link,
-                    weight=1,
-                    length=int(info[2]),
-                )
-                id_link += 1
+                if undirected_file:
+                    graph.add_edge(
+                        info[1],
+                        info[0],
+                        id=id_link,
+                        index=id_link,
+                        weight=1,
+                        length=int(info[2]),
+                    )
+                    id_link += 1
 
     return graph
 
-def get_precomputed_path(G, source, target, k, weight=None):
-    return list(islice(nx.shortest_simple_paths(G, source, target, weight=weight), k))
+# File from sndlib, refer to data/germany/germany.txt for file format
+@dataclass
+class Node:
+    id: int
+    name: str
+    long: float
+    lat: float
+
+'''
+Read file following snd format. See ./data/germany/sndlib_germany.txt for the reference 
+how the format looks like
+'''
+def read_sndlib_txt_file(file):
+    node_pattern = r'(.+?)\s*\(\s*([-+]?\d*\.?\d+)\s+([-+]?\d*\.?\d+)\s*\)'
+    link_pattern = r'\(\s*(.+?)\s+(.+?)\s*\)'
+
+    read_node_flag = True
+    node_id = 1
+    link_id = 0
+    map_node_name = {}
+
+    graph = nx.DiGraph()
+
+    with open(file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("Nodes:"):
+                read_node_flag = True
+                continue
+            
+            if line.startswith("Links:"):
+                read_node_flag = False
+                continue
+
+            if read_node_flag:
+                matches = re.findall(node_pattern, line)
+                for name, long, lat in matches:
+                    node = Node(node_id, name, float(long), float(lat))
+                    map_node_name[name] = node
+                graph.add_node(str(node_id), name=str(node_id))
+                node_id += 1
+            else:
+                match = re.search(link_pattern, line)
+                city1 = match.group(1).strip()
+                city2 = match.group(2).strip()
+                long1, lat1 = map_node_name[city1].long, map_node_name[city1].lat
+                long2, lat2 = map_node_name[city2].long, map_node_name[city2].lat
+                d = distance((lat1, long1), (lat2, long2))
+                graph.add_edge(str(map_node_name[city1].id),
+                    str(map_node_name[city2].id),
+                    id=link_id,
+                    index=link_id,
+                    weight=1,
+                    length=int(d))
+                link_id += 1
+
+                graph.add_edge(str(map_node_name[city2].id),
+                    str(map_node_name[city1].id),
+                    id=link_id,
+                    index=link_id,
+                    weight=1,
+                    length=int(d))
+                link_id += 1
+    return graph
+
+def get_precomputed_path(G, source, target, k=5, alpha=2, weight='weight'):
+    if k is None:
+        p = nx.shortest_path_length(G, source, target)
+        print(f"Compute precomputed path: ({source}, {target}, {p+alpha})")
+        return list(nx.all_simple_paths(G, source, target, cutoff=p+alpha))
+    else:
+        return list(islice(nx.shortest_simple_paths(G, source, target, weight=weight), k))
 
 def get_path_weight(graph, path, weight="length"):
     return np.sum([graph[path[i]][path[i + 1]][weight] for i in range(len(path) - 1)])
@@ -161,20 +248,29 @@ def get_best_modulation_format(
         "It was not possible to find a suitable MF for a path with {} km".format(length)
     )
 
-def get_topology(file_name, topology_name, k_paths=5):
+'''
+@undirected_file: there are file with undirected link and directed link. Check data file before use
+@sndformat: Check if the data file is following snd format. See ./data/germany/sndlib_germany.txt 
+for the reference how the format looks like
+@alpha: with n=length of shortest path, precompute all paths with length <= n+alpha
+@k_paths: compute precomputed paths as k-shortest path. If it is None, then return alpha precomputed path
+'''
+def get_topology(file_name, topology_name, k_paths=5, undirected_file=True, sndformat=False, alpha=2):
     global modulations
 
     k_shortest_paths = {}
-    if file_name.endswith(".txt"):
-        topology = read_txt_file(file_name)
+    if not sndformat:
+        topology = read_txt_file(file_name, undirected_file=undirected_file)
     else:
-        raise ValueError("Supplied topology is unknown")
+        topology = read_sndlib_txt_file(file_name)
     idp = 0
+    num_path = 0
     for idn1, n1 in enumerate(topology.nodes()):
         for idn2, n2 in enumerate(topology.nodes()):
             if idn1 < idn2:
-                paths = get_precomputed_path(topology, n1, n2, k_paths, weight="length")
-                print(n1, n2, len(paths))
+                paths = get_precomputed_path(topology, n1, n2, k=k_paths, alpha=alpha, weight='length')
+                # print(n1, n2, len(paths))
+                num_path = max(len(paths), num_path)
                 lengths = [
                     get_path_weight(topology, path, weight="length") for path in paths
                 ]
@@ -204,6 +300,7 @@ def get_topology(file_name, topology_name, k_paths=5):
                 k_shortest_paths[n2, n1] = objs
     topology.graph["name"] = topology_name
     topology.graph["ksp"] = k_shortest_paths
+    topology.graph["max_numpath"] = num_path
     if modulations is not None:
         topology.graph["modulations"] = modulations
     topology.graph["k_paths"] = k_paths
