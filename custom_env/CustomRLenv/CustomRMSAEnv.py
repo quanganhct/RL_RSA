@@ -80,8 +80,8 @@ class CustomRMSAEnv(RMSAEnv):
             candidate_p_minimum_osnr = []
             candidate_p_inband_xt = []
             candidate_p_impairment = []
-        
-            for i in range(len(self.topology.graph['ksp'][(src, dst)])):
+            num_path = len(self.topology.graph['ksp'][(src, dst)])
+            for i in range(num_path):
                 pobj: Path = self.k_shortest_paths[(src, dst)][i]
                 path = pobj.node_list
                 # path = self.k_shortest_paths[(src, dst)][i].node_list
@@ -472,12 +472,15 @@ class CustomRMSAEnv(RMSAEnv):
     
     def get_path_spectrum(self):
         path_spectrum = []
-        for path_idx in range(self.k_paths):
+        num_path = len(self.k_shortest_paths[
+                    self.current_service.source, self.current_service.destination
+                ])
+        for index in range(num_path):
             # get available block given best
             spectrum = self.get_available_slots(
                 self.k_shortest_paths[
                     self.current_service.source, self.current_service.destination
-                ][path_idx])
+                ][index])
         
             path_spectrum.append(spectrum)
         return path_spectrum
