@@ -8,6 +8,7 @@ Created on Fri Feb 27 12:06:57 2026
 import numpy as np
 import networkx as nx
 from custom_env.optical_rl_gym.envs.rmsa_env import RMSAEnv
+from custom_env.CustomRLenv import utils
 import math
 
 from custom_env.CustomRLenv.utils import Path, Modulation, Service
@@ -32,6 +33,12 @@ class CustomRMSAEnv(RMSAEnv):
         # In case of alpha shortest path, @max_num_path is the maximum path per pair nodes, and it is 
         # k_paths in case of k shortest path
         self.max_num_path = self.topology.graph["max_numpath"]
+
+        #Use the below graph to create GNN
+        #TODO: the betweenness centrality of the transformed graph should be related to the old one ?
+        self.transformed_graph = utils.transform_graph(self.topology)
+        self.tgraph_node_degree = dict(self.transformed_graph.degree())
+        self.tgraph_node_betweenness = nx.betweenness_centrality(self.transformed_graph)
 
     # -----------------------------
     # Node feature vector x_v

@@ -309,3 +309,30 @@ def get_topology(file_name, topology_name, k_paths=5, undirected_file=True, sndf
         topology.graph["node_indices"].append(node)
         topology.nodes[node]["index"] = idx
     return topology
+
+
+"""
+@graph: the network topology
+@return: a transformed graph, in which the nodes of the new graph are corresponding with the edges
+of @graph, and a directed edge (u, v) existed in @return iff u and v are adjacent in @graph and 
+u is an in edge and v is an out edge. Node data is the length of its corresponding edge
+"""
+def transform_graph(graph: nx.DiGraph):
+    tgraph = nx.DiGraph()
+    for e in graph.edges():
+        data = graph.get_edge_data(e[0], e[1])
+        new_node_id = str(int(data['id']) + 1)
+        tgraph.add_node(new_node_id, name=new_node_id, length=data['length'])
+
+    for n in graph.nodes():
+        in_edge = graph.in_edges(n)
+        out_edge = graph.out_edges(n)
+
+        for u in in_edge:
+            uid = int(graph.get_edge_data(u[0], u[1])['id']) + 1
+            for v in out_edge:
+                vid = int(graph.get_edge_data(v[0], v[1])['id']) + 1
+                tgraph.add_edge(str(uid), str(vid))
+
+    return tgraph
+        
