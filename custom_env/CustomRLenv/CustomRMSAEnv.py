@@ -277,10 +277,13 @@ class CustomRMSAEnv(RMSAEnv):
         Method that computes the number of spectrum slots necessary to accommodate the service request into the path.
         The method already adds the guardband.
         """
+        modulation = path.current_modulation
+        if modulation is None:
+            modulation = path.best_modulation
         return (
             math.ceil(
                 self.current_service.bit_rate
-                / (path.current_modulation.spectral_efficiency * self.channel_width)
+                / (modulation.spectral_efficiency * self.channel_width)
             )
             + 1
         )
@@ -307,7 +310,7 @@ class CustomRMSAEnv(RMSAEnv):
         ):  # action is for assigning a path
             selected_path: Path = self.k_shortest_paths[src, dest][path]
             selected_path.current_modulation = self.list_modulations[modulation]
-            
+
             slots = self.get_number_slots(
                 self.k_shortest_paths[src, dest][path]
             )
