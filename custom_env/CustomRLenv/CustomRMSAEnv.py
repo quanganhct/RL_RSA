@@ -40,6 +40,8 @@ class CustomRMSAEnv(RMSAEnv):
         self.tgraph_node_degree = dict(self.transformed_graph.degree())
         self.tgraph_node_betweenness = nx.betweenness_centrality(self.transformed_graph)
 
+        self.list_modulations = list(self.topology.graph["modulations"])
+
     # -----------------------------
     # Node feature vector x_v
     # -----------------------------
@@ -270,13 +272,26 @@ class CustomRMSAEnv(RMSAEnv):
         impairment = sum([self.network.links[link].impairment for link in path_links])
         return impairment
 
-    
+    def get_number_slots(self, path: Path) -> int:
+        """
+        Method that computes the number of spectrum slots necessary to accommodate the service request into the path.
+        The method already adds the guardband.
+        """
+        return (
+            math.ceil(
+                self.current_service.bit_rate
+                / (path.current_modulation.spectral_efficiency * self.channel_width)
+            )
+            + 1
+        )
     
     # -----------------------------
     # Custom step to update features
     # -----------------------------
     def step(self, action):
         path, initial_slot = action[0], action[1]
+        modulation = action[2]
+
         src, dest = self.current_service.source, self.current_service.destination
         num_path = len(self.k_shortest_paths[src, dest])
         # registering overall statistics
@@ -290,6 +305,9 @@ class CustomRMSAEnv(RMSAEnv):
         if (
             path < num_path and initial_slot < self.num_spectrum_resources
         ):  # action is for assigning a path
+            selected_path: Path = self.k_shortest_paths[src, dest][path]
+            selected_path.current_modulation = self.list_modulations[modulation]
+            
             slots = self.get_number_slots(
                 self.k_shortest_paths[src, dest][path]
             )
@@ -415,7 +433,7 @@ class CustomRMSAEnv(RMSAEnv):
         # info["impairment_penalty"] = impairment
         
         path_mask, mod_mask, spec_mask = self.get_mask()
-        next_state["masks"] = (path_mask, mod_mask, spec_mask) = self.get_mask()
+        next_state["masks"] = (path_mask, mod_mask, spec_mask) 
         next_state["path_spectrum"]  = self.get_path_spectrum()
         
         
@@ -493,6 +511,7 @@ class CustomRMSAEnv(RMSAEnv):
         return path_spectrum
     
     
+    #TODO: Check the mask for k-path and for alpha shortest path
     # -----------------------------
     # Optional: helper for masks
     # -----------------------------
