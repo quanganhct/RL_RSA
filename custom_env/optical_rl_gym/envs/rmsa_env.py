@@ -13,6 +13,7 @@ import numpy as np
 from custom_env.optical_rl_gym.utils import Path, Service
 
 from .optical_network_env import OpticalNetworkEnv
+from env import constant
 
 
 class RMSAEnv(OpticalNetworkEnv):
@@ -398,7 +399,8 @@ class RMSAEnv(OpticalNetworkEnv):
         self.topology.graph["running_services"].append(self.current_service)
         self.current_service.path = path
         self.current_service.initial_slot = initial_slot
-        self.current_service.number_slots = number_slots
+        self.current_service.number_slots = number_slots        
+
         self._update_network_stats()
 
         self.services_accepted += 1

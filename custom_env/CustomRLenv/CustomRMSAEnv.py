@@ -12,6 +12,8 @@ from custom_env.CustomRLenv import utils
 import math
 
 from custom_env.CustomRLenv.utils import Path, Modulation, Service
+from env import constant
+from custom_env.CustomRLenv.osnr import calculate_osnr
 
 class CustomRMSAEnv(RMSAEnv):
     """
@@ -41,6 +43,11 @@ class CustomRMSAEnv(RMSAEnv):
         self.tgraph_node_betweenness = nx.betweenness_centrality(self.transformed_graph)
 
         self.list_modulations = list(self.topology.graph["modulations"])
+        self.launch_power = 10 ** ((constant.launch_power_dbm - 30) / 10)
+
+    # @p: power in dbm
+    def set_launch_power(self, p):
+        self.launch_power = 10 ** ((p - 30) / 10)
 
     # -----------------------------
     # Node feature vector x_v
@@ -311,33 +318,55 @@ class CustomRMSAEnv(RMSAEnv):
             selected_path: Path = self.k_shortest_paths[src, dest][path]
             selected_path.current_modulation = self.list_modulations[modulation]
 
-            slots = self.get_number_slots(
-                self.k_shortest_paths[src, dest][path]
-            )
-            self.logger.debug(
-                "{} processing action {} path {} and initial slot {} for {} slots".format(
-                    self.current_service.service_id, action, path, initial_slot, slots
+            # check if the modulation selected from the agent is legit
+            if selected_path.current_modulation.spectral_efficiency <= selected_path.best_modulation.spectral_efficiency:
+
+                slots = self.get_number_slots(selected_path)
+                self.logger.debug(
+                    "{} processing action {} path {} and initial slot {} for {} slots".format(
+                        self.current_service.service_id, action, path, initial_slot, slots
+                    )
                 )
-            )
-            if self.is_path_free(
-                self.k_shortest_paths[src, dest][path],
-                initial_slot,
-                slots,
-            ):
-                self._provision_path(
-                    self.k_shortest_paths[src, dest][path],
+                if self.is_path_free(
+                    selected_path,
                     initial_slot,
                     slots,
-                )
-                self.current_service.accepted = True
-                self.actions_taken[path, initial_slot] += 1
-                if (
-                    self.bit_rate_selection == "discrete"
-                ):  # if discrete bit rate is being used
-                    self.slots_provisioned_histogram[
-                        slots
-                    ] += 1  # populate the histogram of bit rates
-                self._add_release(self.current_service)
+                ):
+                    
+                    self.current_service.path = path
+                    self.current_service.initial_slot = initial_slot
+                    self.current_service.number_slots = slots
+                    self.current_service.center_frequency = constant.frequency_start \
+                        + constant.frequency_slot_bandwidth * initial_slot \
+                        + constant.frequency_slot_bandwidth * (slots / 2.0)
+                    self.current_service.bandwidth = constant.frequency_slot_bandwidth * slots
+                    self.current_service.launch_power = self.launch_power
+
+                    osnr, ase, nli = calculate_osnr(self, self.current_service)
+                    if osnr >= selected_path.current_modulation.minimum_osnr + constant.osnr_margin:
+
+                        self._provision_path(
+                            self.k_shortest_paths[src, dest][path],
+                            initial_slot,
+                            slots,
+                        )
+                        # self.current_service.center_frequency = constant.frequency_start \
+                        #     + constant.frequency_slot_bandwidth * initial_slot \
+                        #     + constant.frequency_slot_bandwidth * (slots / 2.0)
+                        
+                        # self.current_service.bandwidth = constant.frequency_slot_bandwidth * slots
+
+                        self.current_service.accepted = True
+                        self.actions_taken[path, initial_slot] += 1
+                        if (
+                            self.bit_rate_selection == "discrete"
+                        ):  # if discrete bit rate is being used
+                            self.slots_provisioned_histogram[
+                                slots
+                            ] += 1  # populate the histogram of bit rates
+                        self._add_release(self.current_service)
+                    else:
+                        self.current_service.accepted = False
 
         if not self.current_service.accepted:
             self.actions_taken[self.max_num_path, self.num_spectrum_resources] += 1
@@ -462,7 +491,7 @@ class CustomRMSAEnv(RMSAEnv):
         # 1 if slot is available across all the links
         # zero if not
         
-        available_slots = self.get_available_slots(
+        available_slots = super().get_available_slots(
             self.k_shortest_paths[
                 self.current_service.source, self.current_service.destination
             ][path]
@@ -519,14 +548,14 @@ class CustomRMSAEnv(RMSAEnv):
     # Optional: helper for masks
     # -----------------------------
     def get_mask(self):
-        
+        dim = self.max_num_path
         if not hasattr(self, "current_service"):
-            path_mask = np.ones(self.k_paths)
+            path_mask = np.ones(dim)
             
-            mod_mask = np.ones([self.k_paths, 
+            mod_mask = np.ones([dim, 
                                 len(self.topology.graph['modulations'])])
             
-            spec_mask = np.ones([self.k_paths, 
+            spec_mask = np.ones([dim, 
                                 len(self.topology.graph['modulations']), 
                                 self.num_spectrum_resources])
             return  path_mask, mod_mask, spec_mask
@@ -535,16 +564,16 @@ class CustomRMSAEnv(RMSAEnv):
         src = self.current_service.source
         dst = self.current_service.destination
         
-        path_mask = np.ones(self.k_paths)
+        path_mask = np.ones(dim)
         
-        mod_mask = np.ones([self.k_paths, 
+        mod_mask = np.ones([dim, 
                             len(self.topology.graph['modulations'])])
         
-        spec_mask = np.ones([self.k_paths, 
+        spec_mask = np.ones([dim, 
                             len(self.topology.graph['modulations']), 
                             self.num_spectrum_resources])
         # Masking sheme
-        for path_idx in range(self.k_paths):
+        for path_idx in range(dim):
             # get available block given best
             initial_indices, _= self.get_available_blocks(path_idx)
             #if no path with best modultation mask path + mod + spec

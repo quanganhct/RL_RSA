@@ -115,6 +115,8 @@ class TrainingLogger:
 from custom_env.CustomRLenv.utils import get_topology
 def train():
     
+    # 120 Erlangs ~ 120*60=7200 connection per hour. However 1 loop only generate 1 request
+    # and there're 300 loops in total -> 300 requests, not up to scale
     load = 120  # Traffic load, measured in Erlangs
     seed = 20  # Seed of environment
     episodes = 100 # Number of episodes per execution
@@ -131,9 +133,10 @@ def train():
                     seed=seed, 
                     allow_rejection=True, 
                     load=load, 
-                    mean_service_holding_time=25,
-                   episode_length=episode_length, 
-                   num_spectrum_resources=100)
+                    mean_service_holding_time=10000,
+                    episode_length=episode_length, 
+                    num_spectrum_resources=30,
+                    bit_rates = [100, 200, 400],)
 
     # -----------------------------
     # Environment setup

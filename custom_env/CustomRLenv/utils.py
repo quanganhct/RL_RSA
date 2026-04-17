@@ -7,53 +7,56 @@ from itertools import islice
 from dataclasses import dataclass, field
 from typing import Optional, Sequence, Tuple, Union
 
-
-@dataclass
-class Modulation:
-    name: str
-    # maximum length in km
-    maximum_length: Union[int, float]
-    # number of bits per Hz per sec.
-    spectral_efficiency: int
-    # minimum OSNR that allows it to work
-    minimum_osnr: Optional[float] = field(default=None)
-    # maximum in-band cross-talk
-    inband_xt: Optional[float] = field(default=None)
+from ..optical_rl_gym.utils import Service, Path, Modulation
 
 
-@dataclass
-class Path:
-    path_id: int
-    node_list: Tuple[str]
-    hops: int
-    length: Union[int, float]
-    best_modulation: Optional[Modulation] = field(default=None)
-    current_modulation: Optional[Modulation] = field(default=None)
+# @dataclass
+# class Modulation:
+#     name: str
+#     # maximum length in km
+#     maximum_length: Union[int, float]
+#     # number of bits per Hz per sec.
+#     spectral_efficiency: int
+#     # minimum OSNR that allows it to work
+#     minimum_osnr: Optional[float] = field(default=None)
+#     # maximum in-band cross-talk
+#     inband_xt: Optional[float] = field(default=None)
 
 
-@dataclass(repr=False)
-class Service:
-    service_id: int
-    source: str
-    source_id: int
-    destination: Optional[str] = field(default=None)
-    destination_id: Optional[str] = field(default=None)
-    arrival_time: Optional[float] = field(default=None)
-    holding_time: Optional[float] = field(default=None)
-    bit_rate: Optional[float] = field(default=None)
-    path: Optional[Path] = field(default=None)
-    best_modulation: Optional[Modulation] = field(default=None)
-    service_class: Optional[int] = field(default=None)
-    number_slots: Optional[int] = field(default=None)
-    core: Optional[int] = field(default=None)
-    launch_power: Optional[float] = field(default=None)
-    accepted: bool = field(default=False)
+# @dataclass
+# class Path:
+#     path_id: int
+#     node_list: Tuple[str]
+#     hops: int
+#     length: Union[int, float]
+#     best_modulation: Optional[Modulation] = field(default=None)
+#     current_modulation: Optional[Modulation] = field(default=None)
 
-    def __str__(self):
-        msg = "{"
-        msg += "" if self.bit_rate is None else f"br: {self.bit_rate}, "
-        msg += "" if self.service_class is None else f"cl: {self.service_class}, "
-        return f"Serv. {self.service_id} ({self.source} -> {self.destination})" + msg
+
+# @dataclass(repr=False)
+# class Service:
+#     service_id: int
+#     source: str
+#     source_id: int
+#     destination: Optional[str] = field(default=None)
+#     destination_id: Optional[str] = field(default=None)
+#     arrival_time: Optional[float] = field(default=None)
+#     holding_time: Optional[float] = field(default=None)
+#     bit_rate: Optional[float] = field(default=None)
+#     path: Optional[Path] = field(default=None)
+#     best_modulation: Optional[Modulation] = field(default=None)
+#     service_class: Optional[int] = field(default=None)
+#     number_slots: Optional[int] = field(default=None)
+#     core: Optional[int] = field(default=None)
+#     launch_power: Optional[float] = field(default=None)
+#     accepted: bool = field(default=False)
+#     center_frequency: Optional[float] = field(default=None)
+
+#     def __str__(self):
+#         msg = "{"
+#         msg += "" if self.bit_rate is None else f"br: {self.bit_rate}, "
+#         msg += "" if self.service_class is None else f"cl: {self.service_class}, "
+#         return f"Serv. {self.service_id} ({self.source} -> {self.destination})" + msg
 
 modulations = (
     # the first (lowest efficiency) modulation format needs to have maximum length

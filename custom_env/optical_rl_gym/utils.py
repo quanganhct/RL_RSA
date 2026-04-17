@@ -51,6 +51,8 @@ class Service:
     core: Optional[int] = field(default=None)
     launch_power: Optional[float] = field(default=None)
     accepted: bool = field(default=False)
+    center_frequency: Optional[float] = field(default=None)
+    bandwidth: Optional[float] = field(default=None)
 
     def __str__(self):
         msg = "{"
