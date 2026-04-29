@@ -53,6 +53,8 @@ class Service:
     accepted: bool = field(default=False)
     center_frequency: Optional[float] = field(default=None)
     bandwidth: Optional[float] = field(default=None)
+    nli_inf_from: Optional[dict] = field(default=None)
+    ase_inf: Optional[float] = field(default=None)
 
     def __str__(self):
         msg = "{"

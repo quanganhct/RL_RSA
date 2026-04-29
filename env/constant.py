@@ -21,3 +21,5 @@ frequency_slot_bandwidth = 12.5e9
 launch_power_dbm = 1
 osnr_margin = 2         #db
 noise_figure_db = 4.5
+
+bit_rates = [100, 200, 400]

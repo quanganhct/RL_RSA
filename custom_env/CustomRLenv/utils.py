@@ -339,3 +339,38 @@ def transform_graph(graph: nx.DiGraph):
 
     return tgraph
         
+
+def spectrum_feature_points(spectrum, required=1):
+    length = [0 for i in range(len(spectrum))]
+    fea_length = [0 for i in range(len(spectrum))]
+    for i in range(len(spectrum)-1, -1, -1):
+        if i == len(spectrum) - 1:
+            length[i] = 1 if spectrum[i] == 1 else 0
+        else:
+            length[i] = 0 if spectrum[i] == 0 else length[i+1]+1
+
+    for i in range(len(fea_length)):
+        fea_length[i] = max(length[i]-required+1, 0)
+    
+    max_segment = [0 for i in range(len(spectrum))]
+
+    current_max = 0
+
+    for i in range(len(length)):
+        if fea_length[i] == 0:
+            current_max = 0
+            continue
+        
+        if current_max == 0:
+            current_max = fea_length[i]
+        
+        max_segment[i] = current_max
+    # print("LENGTH", fea_length)
+    # print("MAX SEGMENT", max_segment)
+    set_max = set(max_segment)
+    max_slot = max(set_max)
+    sum_square = math.sqrt(sum([i**2 for i in set_max]))
+    # print("SET", set_max)
+    # print("SUM", sum_square)
+    fr = [(fea_length[i])/(max_segment[i]) * max_slot / sum_square if max_segment[i] > 0 else 0 for i in range(len(spectrum))]
+    return fr

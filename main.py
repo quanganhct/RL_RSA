@@ -10,6 +10,8 @@ from custom_env.optical_rl_gym.envs.rmsa_env  import RMSAEnv
 from custom_env.optical_rl_gym.utils import evaluate_heuristic
 from custom_env.CustomRLenv.model import HierarchicalPolicy
 from custom_env.CustomRLenv.CustomRMSAEnv import  CustomRMSAEnv
+from custom_env.CustomRLenv.utils import transform_graph
+from env import constant
 import pickle
 import logging
 import numpy as np
@@ -136,7 +138,7 @@ def train():
                     mean_service_holding_time=10000,
                     episode_length=episode_length, 
                     num_spectrum_resources=30,
-                    bit_rates = [100, 200, 400],)
+                    bit_rates = constant.bit_rates,)
 
     # -----------------------------
     # Environment setup
@@ -152,8 +154,10 @@ def train():
     num_modulations =  len(env.topology.graph['modulations'])
     num_spectra = env.num_spectrum_resources
 
-
-
+    # -----------------------------
+    # Transformed graph: new graph, with each node corresponding to an edge in the original topology
+    # -----------------------------
+    transformed_topology = transform_graph(topology)
     # -----------------------------
     # RL agent setup
     # -----------------------------

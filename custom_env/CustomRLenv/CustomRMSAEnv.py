@@ -11,9 +11,9 @@ from custom_env.optical_rl_gym.envs.rmsa_env import RMSAEnv
 from custom_env.CustomRLenv import utils
 import math
 
-from custom_env.CustomRLenv.utils import Path, Modulation, Service
+from custom_env.CustomRLenv.utils import Path, Modulation, Service, spectrum_feature_points
 from env import constant
-from custom_env.CustomRLenv.osnr import calculate_osnr
+from custom_env.CustomRLenv.osnr import calculate_osnr, compute_ase_nli
 
 class CustomRMSAEnv(RMSAEnv):
     """
@@ -295,6 +295,39 @@ class CustomRMSAEnv(RMSAEnv):
             + 1
         )
     
+    def reward(self):
+        alpha = 0.4
+        beta = 0.3
+        gamma = 0.3
+        s:Service
+        
+        # Compute minimum gap of OSNR and OSNR_threshold
+        min_gap = 100
+        list_running_service = self.topology.graph["running_services"]
+        set_running_service_idx = set([s.service_id for s in list_running_service])
+
+        for s in list_running_service:
+            power_nli = sum([s.nli_inf_from[sid] if sid in set_running_service_idx else 0 \
+                             for sid in s.nli_inf_from.keys()])
+            nli = power_nli / s.launch_power
+            ase = s.ase_inf / s.launch_power
+            osnr = nli + ase
+
+            osnr = 10 * np.log10(1 / osnr)
+            gap = osnr - s.path.current_modulation.minimum_osnr
+            min_gap = min(min_gap, gap)
+
+        #TODO:
+        # Compute fragmentation rate
+        fr_rate = 0
+
+
+        # Compute normalized bitrate
+        bitrate = self.current_service.bit_rate/max(constant.bit_rates)
+
+        reward = alpha * min_gap/5 + beta * fr_rate + gamma * bitrate
+        return reward
+    
     # -----------------------------
     # Custom step to update features
     # -----------------------------
@@ -342,7 +375,7 @@ class CustomRMSAEnv(RMSAEnv):
                     self.current_service.bandwidth = constant.frequency_slot_bandwidth * slots
                     self.current_service.launch_power = self.launch_power
 
-                    osnr, ase, nli = calculate_osnr(self, self.current_service)
+                    osnr, ase, nli = compute_ase_nli(self, self.current_service)
                     if osnr >= selected_path.current_modulation.minimum_osnr + constant.osnr_margin:
 
                         self._provision_path(
@@ -467,7 +500,9 @@ class CustomRMSAEnv(RMSAEnv):
         path_mask, mod_mask, spec_mask = self.get_mask()
         next_state["masks"] = (path_mask, mod_mask, spec_mask) 
         next_state["path_spectrum"]  = self.get_path_spectrum()
-        
+
+        #TODO: score of initial slot
+        next_state["spectrum_initial_slot"] = self.get_spectrum_fr_score()
         
         return next_state, reward, done, info
     
@@ -527,6 +562,37 @@ class CustomRMSAEnv(RMSAEnv):
 
         return initial_indices[final_indices], lengths[final_indices]
     
+    # -----------------------------
+    # Get the scores for initial slot
+    # -----------------------------
+    def get_spectrum_fr_score(self):
+        dim = self.max_num_path
+        spec_mask = np.ones([dim, 
+                            len(self.topology.graph['modulations']), 
+                            self.num_spectrum_resources])
+        
+        if not hasattr(self, "current_service"):
+            return spec_mask
+        
+        for path_idx in range(dim):
+            available_slots = super().get_available_slots(
+                self.k_shortest_paths[
+                    self.current_service.source, self.current_service.destination
+                ][path_idx])
+
+            for mod_idx in range(len(self.topology.graph['modulations'])):
+                modulation:Modulation = self.topology.graph['modulations'][mod_idx]
+                slots = self.get_number_slots_given_modulation(
+                    self.k_shortest_paths[
+                        self.current_service.source, self.current_service.destination
+                    ][path_idx], modulation
+                )
+
+                fp = spectrum_feature_points(available_slots, slots)
+                spec_mask[path_idx][mod_idx] = fp
+        
+        return spec_mask
+
     def get_path_spectrum(self):
         path_spectrum = []
         num_path = len(self.k_shortest_paths[
