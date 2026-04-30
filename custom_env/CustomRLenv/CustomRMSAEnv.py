@@ -193,6 +193,7 @@ class CustomRMSAEnv(RMSAEnv):
         features = []
         for link_id, link in enumerate(self.topology.edges()):
             # Spectrum occupancy vector: 1=occupied, 0=free
+            #TODO: change spectrum_usage to self.topology.graph["available_slots"]
             s_e = self.spectrum_usage[link_id]
 
             # Physical length
@@ -220,6 +221,8 @@ class CustomRMSAEnv(RMSAEnv):
             
 
             # edge_vec = np.concatenate([s_e, [l_e, osnr, nli, ase, H_e]])
+
+            #TODO: add available slots as feature
             edge_vec = np.concatenate([s_e, [l_e, 
                                              utilization, 
                                              running_services, 
@@ -506,7 +509,7 @@ class CustomRMSAEnv(RMSAEnv):
         next_state["masks"] = (path_mask, mod_mask, spec_mask) 
         next_state["path_spectrum"]  = self.get_path_spectrum()
 
-        #TODO: score of initial slot
+        # score of initial slot 
         next_state["spectrum_initial_slot"] = self.get_spectrum_fr_score()
         
         return next_state, reward, done, info
@@ -614,7 +617,7 @@ class CustomRMSAEnv(RMSAEnv):
         return path_spectrum
     
     
-    #TODO: Check the mask for k-path and for alpha shortest path
+    # Check the mask for k-path and for alpha shortest path
     # -----------------------------
     # Optional: helper for masks
     # -----------------------------

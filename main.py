@@ -155,7 +155,7 @@ def train():
     num_spectra = env.num_spectrum_resources
 
     # -----------------------------
-    # Transformed graph: new graph, with each node corresponding to an edge in the original topology
+    # TODO: Transformed graph: new graph, with each node corresponding to an edge in the original topology
     # -----------------------------
     transformed_topology = transform_graph(topology)
     # -----------------------------
