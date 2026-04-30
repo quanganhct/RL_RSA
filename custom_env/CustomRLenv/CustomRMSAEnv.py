@@ -126,6 +126,11 @@ class CustomRMSAEnv(RMSAEnv):
             self.candidate_paths_inband_xt[(src, dst)] = candidate_p_inband_xt
             self.candidate_paths_impairment[(src, dst)] = candidate_p_impairment
      
+    
+    #TODO: 1. add minimum gap osnr - threshold of the services that shared link with the path
+    def get_candidate_path_features(self):
+        pass
+    
     def get_candidate_paths(self):
         if not hasattr(self, "current_service"):
             return [np.zeros(1) for i in range(self.max_num_path)]
@@ -317,7 +322,7 @@ class CustomRMSAEnv(RMSAEnv):
             gap = osnr - s.path.current_modulation.minimum_osnr
             min_gap = min(min_gap, gap)
 
-        #TODO:
+        #TODO: 
         # Compute fragmentation rate
         fr_rate = 0
 
@@ -366,7 +371,7 @@ class CustomRMSAEnv(RMSAEnv):
                     slots,
                 ):
                     
-                    self.current_service.path = path
+                    self.current_service.path = selected_path
                     self.current_service.initial_slot = initial_slot
                     self.current_service.number_slots = slots
                     self.current_service.center_frequency = constant.frequency_start \
