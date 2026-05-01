@@ -11,8 +11,8 @@ from custom_env.optical_rl_gym.envs.rmsa_env import RMSAEnv, Service
 
 
 def calculate_osnr(env: RMSAEnv, current_service: Service):
-    if not current_service.accepted and current_service not in env.topology.graph["running_services"]:
-        return None, None, None
+    # if not current_service.accepted and current_service not in env.topology.graph["running_services"]:
+    #     return None, None, None
 
     beta_2: float = -21.3e-27  
     gamma: float = 1.3e-3  

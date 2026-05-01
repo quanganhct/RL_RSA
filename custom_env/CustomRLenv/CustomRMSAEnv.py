@@ -44,6 +44,15 @@ class CustomRMSAEnv(RMSAEnv):
 
         self.list_modulations = list(self.topology.graph["modulations"])
         self.launch_power = 10 ** ((constant.launch_power_dbm - 30) / 10)
+        self.granularities = self.compute_granularity()
+
+    def compute_granularity(self):
+        granularity = []
+        for bit_rate in constant.bit_rates:
+            for m in utils.modulations:
+                nbslot = math.ceil(bit_rate/(m.spectral_efficiency * 12.5))
+                granularity.append(nbslot)
+        return set(granularity)
 
     # @p: power in dbm
     def set_launch_power(self, p):
@@ -303,6 +312,23 @@ class CustomRMSAEnv(RMSAEnv):
             + 1
         )
     
+    def compute_fragmentation_abp(self):
+        abp = 0
+        for edge in self.topology.edges:
+            eid = self.topology[edge[0]][edge[1]]["id"]
+            available_slots = self.topology.graph["available_slots"][eid]
+            numerator = 0
+            denominator = 0
+            first_slot, val, length = CustomRMSAEnv.rle(available_slots)
+
+            for g in self.granularities:
+                numerator += np.dot(val, np.floor(length/float(g))).flatten()[0]
+                denominator += np.floor(np.dot(val, length).flatten()/float(g))[0]
+            
+            print("Edge, Numerator, denominator",edge, numerator, denominator)
+            abp += float(numerator) / float(denominator)
+        return abp / len(self.topology.edges)
+
     def reward(self):
         alpha = 0.4
         beta = 0.3
@@ -325,9 +351,8 @@ class CustomRMSAEnv(RMSAEnv):
             gap = osnr - s.path.current_modulation.minimum_osnr
             min_gap = min(min_gap, gap)
 
-        #TODO: 
         # Compute fragmentation rate
-        fr_rate = 0
+        fr_rate = self.compute_fragmentation_abp()
 
 
         # Compute normalized bitrate
