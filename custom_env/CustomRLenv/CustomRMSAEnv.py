@@ -196,53 +196,6 @@ class CustomRMSAEnv(RMSAEnv):
         
         return self.candidate_paths_impairment[(src, dst)]
     
-    
-    # -----------------------------
-    # Edge feature vector x_e
-    # -----------------------------
-    def get_edge_features(self):
-        features = []
-        for link_id, link in enumerate(self.topology.edges()):
-            # Spectrum occupancy vector: 1=occupied, 0=free
-            #TODO: change spectrum_usage to self.topology.graph["available_slots"]
-            s_e = self.spectrum_usage[link_id]
-
-            # Physical length
-            l_e = self.topology.edges[link]['length']  # km or meters
-            
-            # link utilization 
-            utilization = self.topology.edges[link]['utilization']  # 
-            
-            # num running services on link
-            running_services = len(self.topology.edges[link]['running_services'])  # 
-            
-            # num running services on link
-            external_fragmentation = self.topology.edges[link]['external_fragmentation']  #
-            
-            # num running services on link
-            compactness = self.topology.edges[link]['compactness']  #
-
-            # Impairments
-            # osnr = getattr(link, "OSNR", 0.0)
-            # nli = getattr(link, "NLI", 0.0)
-            # ase = getattr(link, "ASE", 0.0)
-
-            # Fragmentation / contiguity metric H_e
-            H_e = self.compute_fragmentation(link_id)
-            
-
-            # edge_vec = np.concatenate([s_e, [l_e, osnr, nli, ase, H_e]])
-
-            #TODO: add available slots as feature
-            edge_vec = np.concatenate([s_e, [l_e, 
-                                             utilization, 
-                                             running_services, 
-                                             external_fragmentation, 
-                                             compactness,  
-                                             H_e]])
-            features.append(edge_vec)
-        return np.array(features, dtype=np.float32)
-    
     def compute_fragmentation(self, link_id):
         """
         Example: H_e = fraction of free slots that are non-contiguous
@@ -285,6 +238,83 @@ class CustomRMSAEnv(RMSAEnv):
         bitrate_norm = np.array([bitrate / getattr(self, "max_bitrate", 100)])
 
         return np.concatenate([src_onehot, dst_onehot, bitrate_norm])
+    
+    # -----------------------------
+    # Edge feature vector x_e
+    # -----------------------------
+    def get_edge_features(self):
+        features = []
+        for link_id, link in enumerate(self.topology.edges()):
+            # Spectrum occupancy vector: 1=occupied, 0=free
+            #TODO: change spectrum_usage to self.topology.graph["available_slots"]
+            s_e = self.spectrum_usage[link_id]
+
+            # Physical length
+            l_e = self.topology.edges[link]['length']  # km or meters
+            
+            # link utilization 
+            utilization = self.topology.edges[link]['utilization']  # 
+            
+            # num running services on link
+            running_services = len(self.topology.edges[link]['running_services'])  # 
+            
+            # num running services on link
+            external_fragmentation = self.topology.edges[link]['external_fragmentation']  #
+            
+            # num running services on link
+            compactness = self.topology.edges[link]['compactness']  #
+
+            # Impairments
+            # osnr = getattr(link, "OSNR", 0.0)
+            # nli = getattr(link, "NLI", 0.0)
+            # ase = getattr(link, "ASE", 0.0)
+
+            # Fragmentation / contiguity metric H_e
+            #TODO: redo using abp fr formula for each link
+            H_e = self.compute_fragmentation(link_id)
+            
+            #TODO: compute min(SNR - SNRT) for every link with all req running on that link
+
+            # edge_vec = np.concatenate([s_e, [l_e, osnr, nli, ase, H_e]])
+
+            #TODO: add available slots as feature
+            edge_vec = np.concatenate([s_e, [l_e, 
+                                             utilization, 
+                                             running_services, 
+                                             external_fragmentation, 
+                                             compactness,  
+                                             H_e]])
+            features.append(edge_vec)
+        return np.array(features, dtype=np.float32)
+
+    # Path features for modulation selection
+    def get_path_features(self, path_idx):
+        src, dest = self.current_service.source, self.current_service.destination
+        selected_path: Path = self.k_shortest_paths[src, dest][path_idx]
+        path_length = selected_path.length
+        nb_hops = selected_path.hops
+
+        nbslot_array = np.zeros(len(utils.modulations))
+        for i in len(utils.modulations):
+            mod = utils.modulations[i]
+            if mod.spectral_efficiency > self.current_service.best_modulation.spectral_efficiency:
+                continue
+
+            nb_slot = self.get_number_slots_given_modulation(selected_path, mod)
+            nbslot_array[i] = nb_slot
+
+        #TODO: abp frag of the edges on the links of the path for each modulation
+
+
+        pass
+
+    # Modulation features for slot selection
+    def get_modulation_features(self, path_idx, modulation_idx):
+        self.get_spectrum_fr_score()
+
+        #TODO: min gap (SNR - SNRT) for all the service sharing links with @path_idx on a whole spectrum
+        pass
+
 
     # -----------------------------
     # Example: get impairment for a chosen path
