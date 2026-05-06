@@ -119,7 +119,7 @@ def train():
     
     # 120 Erlangs ~ 120*60=7200 connection per hour. However 1 loop only generate 1 request
     # and there're 300 loops in total -> 300 requests, not up to scale
-    load = 120  # Traffic load, measured in Erlangs
+    load = 200  # Traffic load, measured in Erlangs
     seed = 20  # Seed of environment
     episodes = 100 # Number of episodes per execution
     episode_length = 300  # Episode Length
@@ -135,17 +135,16 @@ def train():
                     seed=seed, 
                     allow_rejection=True, 
                     load=load, 
-                    mean_service_holding_time=10000,
+                    mean_service_holding_time=200,
                     episode_length=episode_length, 
                     num_spectrum_resources=30,
-                    bit_rates = constant.bit_rates,)
+                    bit_rates = constant.bit_rates,
+                    bit_rate_selection="discrete",)
 
     # -----------------------------
     # Environment setup
     # -----------------------------
     env = CustomRMSAEnv(**env_args)
-
-
 
     # Get environment info
     num_nodes = env.num_nodes

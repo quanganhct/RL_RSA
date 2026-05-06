@@ -46,6 +46,8 @@ class CustomRMSAEnv(RMSAEnv):
         self.launch_power = 10 ** ((constant.launch_power_dbm - 30) / 10)
         self.granularities = self.compute_granularity()
 
+        self.generated_req_lifetime = []
+
     def compute_granularity(self):
         granularity = []
         for bit_rate in constant.bit_rates:
@@ -326,7 +328,8 @@ class CustomRMSAEnv(RMSAEnv):
                 denominator += np.floor(np.dot(val, length).flatten()/float(g))[0]
             
             print("Edge, Numerator, denominator",edge, numerator, denominator)
-            abp += float(numerator) / float(denominator)
+            if denominator != 0:
+                abp += float(numerator) / float(denominator)
         return abp / len(self.topology.edges)
 
     def reward(self):
@@ -367,6 +370,7 @@ class CustomRMSAEnv(RMSAEnv):
     def step(self, action):
         path, initial_slot = action[0], action[1]
         modulation = action[2]
+        self.generated_req_lifetime.append((self.current_service.arrival_time, self.current_service.holding_time))
 
         src, dest = self.current_service.source, self.current_service.destination
         num_path = len(self.k_shortest_paths[src, dest])
