@@ -327,7 +327,7 @@ class CustomRMSAEnv(RMSAEnv):
                 numerator += np.dot(val, np.floor(length/float(g))).flatten()[0]
                 denominator += np.floor(np.dot(val, length).flatten()/float(g))[0]
             
-            print("Edge, Numerator, denominator",edge, numerator, denominator)
+            # print("Edge, Numerator, denominator",edge, numerator, denominator)
             if denominator != 0:
                 abp += float(numerator) / float(denominator)
         return abp / len(self.topology.edges)
