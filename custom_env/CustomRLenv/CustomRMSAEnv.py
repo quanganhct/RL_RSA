@@ -11,9 +11,11 @@ from custom_env.optical_rl_gym.envs.rmsa_env import RMSAEnv
 from custom_env.CustomRLenv import utils
 import math
 
+from typing import List
+
 from custom_env.CustomRLenv.utils import Path, Modulation, Service, spectrum_feature_points
 from env import constant
-from custom_env.CustomRLenv.osnr import calculate_osnr, compute_ase_nli
+from custom_env.CustomRLenv.osnr import calculate_osnr, compute_ase_nli, compute_min_gap_osnr
 
 class CustomRMSAEnv(RMSAEnv):
     """
@@ -196,20 +198,6 @@ class CustomRMSAEnv(RMSAEnv):
         
         return self.candidate_paths_impairment[(src, dst)]
     
-    def compute_fragmentation(self, link_id):
-        """
-        Example: H_e = fraction of free slots that are non-contiguous
-        """
-        free_slots = np.where(np.array(self.spectrum_usage[link_id]) == 0)[0]
-        if len(free_slots) == 0:
-            return 1.0  # fully fragmented
-        contiguous_blocks = 1
-        for i in range(1, len(free_slots)):
-            if free_slots[i] != free_slots[i-1] + 1:
-                contiguous_blocks += 1
-        H_e = contiguous_blocks / len(self.spectrum_usage[link_id])
-        return H_e
-    
     # -----------------------------
     # Compute demand embedding for RL state
     # -----------------------------
@@ -239,15 +227,36 @@ class CustomRMSAEnv(RMSAEnv):
 
         return np.concatenate([src_onehot, dst_onehot, bitrate_norm])
     
+    def compute_min_gap_snr_on_link(self, link):
+        s:Service
+
+        min_gap = 100
+        list_running_service = self.topology.graph["running_services"]
+        set_running_service_idx = set([s.service_id for s in list_running_service])
+
+        running_service_on_link = self.topology.edges[link]["running_services"]
+
+        for s in running_service_on_link:
+            power_nli = sum([s.nli_inf_from[sid] if sid in set_running_service_idx else 0 \
+                             for sid in s.nli_inf_from.keys()])
+            nli = power_nli / s.launch_power
+            ase = s.ase_inf / s.launch_power
+            osnr = nli + ase
+
+            osnr = 10 * np.log10(1 / osnr)
+            gap = osnr - s.path.current_modulation.minimum_osnr
+            min_gap = min(min_gap, gap)
+        
+        return min_gap
+
     # -----------------------------
     # Edge feature vector x_e
     # -----------------------------
     def get_edge_features(self):
         features = []
         for link_id, link in enumerate(self.topology.edges()):
-            # Spectrum occupancy vector: 1=occupied, 0=free
-            #TODO: change spectrum_usage to self.topology.graph["available_slots"]
-            s_e = self.spectrum_usage[link_id]
+            # Availability vector: 1=free, 0=occupied
+            s_e = self.topology.graph["available_slots"][link_id]
 
             # Physical length
             l_e = self.topology.edges[link]['length']  # km or meters
@@ -269,11 +278,11 @@ class CustomRMSAEnv(RMSAEnv):
             # nli = getattr(link, "NLI", 0.0)
             # ase = getattr(link, "ASE", 0.0)
 
-            # Fragmentation / contiguity metric H_e
-            #TODO: redo using abp fr formula for each link
-            H_e = self.compute_fragmentation(link_id)
+            # Compute abp fr formula for each link
+            H_e = self.compute_fragmentation_abp_on_link(link_id)
             
-            #TODO: compute min(SNR - SNRT) for every link with all req running on that link
+            # Compute min(SNR - SNRT) for every link with all req running on that link
+            min_snr_gap = self.compute_min_gap_snr_on_link(link)
 
             # edge_vec = np.concatenate([s_e, [l_e, osnr, nli, ase, H_e]])
 
@@ -283,7 +292,7 @@ class CustomRMSAEnv(RMSAEnv):
                                              running_services, 
                                              external_fragmentation, 
                                              compactness,  
-                                             H_e]])
+                                             H_e, min_snr_gap]])
             features.append(edge_vec)
         return np.array(features, dtype=np.float32)
 
@@ -293,28 +302,59 @@ class CustomRMSAEnv(RMSAEnv):
         selected_path: Path = self.k_shortest_paths[src, dest][path_idx]
         path_length = selected_path.length
         nb_hops = selected_path.hops
-
+        frag_score = np.zeros(len(utils.modulations))
         nbslot_array = np.zeros(len(utils.modulations))
+
         for i in len(utils.modulations):
-            mod = utils.modulations[i]
+            mod:Modulation = utils.modulations[i]
             if mod.spectral_efficiency > self.current_service.best_modulation.spectral_efficiency:
                 continue
 
-            nb_slot = self.get_number_slots_given_modulation(selected_path, mod)
+            nb_slot = self.get_number_slots_given_modulation(mod)
             nbslot_array[i] = nb_slot
 
-        #TODO: abp frag of the edges on the links of the path for each modulation
+            # Compute abp frag of the edges on the links of @path_idx for each modulation
+            abp = 0
+            for i in range(len(selected_path.node_list)-1):
+                link_id = self.topology[selected_path.node_list[i]][selected_path.node_list[i+1]]["id"]
+                abp += self.compute_fragmentation_abp_on_link_for_path_modulation(link_id, mod)
+            abp = abp / (len(selected_path.node_list)-1)
+            frag_score[i] = abp
 
-
-        pass
+        return path_length, nb_hops, nbslot_array, frag_score
 
     # Modulation features for slot selection
     def get_modulation_features(self, path_idx, modulation_idx):
-        self.get_spectrum_fr_score()
-
+        available_slots = super().get_available_slots(
+                self.k_shortest_paths[
+                    self.current_service.source, self.current_service.destination
+                ][path_idx])
+        
+        selected_path:Path = self.k_shortest_paths[
+                        self.current_service.source, self.current_service.destination
+                    ][path_idx]
+        modulation:Modulation = self.topology.graph['modulations'][modulation_idx]
+        slots = self.get_number_slots_given_modulation(modulation)
+        fp = spectrum_feature_points(available_slots, slots)
+        
+        shared_running_services = self.get_running_service_share_links(selected_path)
         #TODO: min gap (SNR - SNRT) for all the service sharing links with @path_idx on a whole spectrum
-        pass
+        min_gap = np.zeros(len(fp))
+        for i in range(len(fp)):
+            if available_slots[i] == 0:
+                continue
 
+            mgap, sid = compute_min_gap_osnr(self, self.current_service, selected_path, \
+                                             modulation, i, shared_running_services)
+            min_gap[i] = mgap
+        return fp, min_gap
+
+    def get_running_service_share_links(self, path:Path) -> List[Service]:
+        _result = set()
+        for i in range(len(path.node_list)-1):
+            s = self.topology[path.node_list[i]][path.node_list[i+1]]["running_services"]
+            _result.update(s)
+        return list(_result)
 
     # -----------------------------
     # Example: get impairment for a chosen path
@@ -336,6 +376,13 @@ class CustomRMSAEnv(RMSAEnv):
         modulation = path.current_modulation
         if modulation is None:
             modulation = path.best_modulation
+        return self.get_number_slots_given_modulation(modulation)
+    
+    def get_number_slots_given_modulation(self, modulation:Modulation):
+        """
+        Method that computes the number of spectrum slots necessary to accommodate the service request into the path.
+        The method already adds the guardband.
+        """
         return (
             math.ceil(
                 self.current_service.bit_rate
@@ -344,22 +391,33 @@ class CustomRMSAEnv(RMSAEnv):
             + 1
         )
     
+    def compute_fragmentation_abp_on_link(self, link_id:int):
+        """
+        Example: H_e = fraction of free slots that are non-contiguous
+        """
+        available_slots = self.topology.graph["available_slots"][link_id]
+        numerator = 0
+        denominator = 0
+        first_slot, val, length = CustomRMSAEnv.rle(available_slots)
+        for g in self.granularities:
+            numerator += np.dot(val, np.floor(length/float(g))).flatten()[0]
+            denominator += np.floor(np.dot(val, length).flatten()/float(g))[0]
+        return float(numerator) / float(denominator) if denominator != 0 else 0
+
+    def compute_fragmentation_abp_on_link_for_path_modulation(self, link_id:int, mod:Modulation):
+        nbslots = self.get_number_slots_given_modulation(mod)
+        available_slots = self.topology.graph["available_slots"][link_id]
+
+        first_slot, val, length = CustomRMSAEnv.rle(available_slots)
+        numerator = np.dot(val, np.floor(length/float(nbslots))).flatten()[0]
+        denominator = np.floor(np.dot(val, length).flatten()/float(nbslots))[0]
+        return float(numerator) / float(denominator) if denominator != 0 else 0
+
     def compute_fragmentation_abp(self):
         abp = 0
         for edge in self.topology.edges:
             eid = self.topology[edge[0]][edge[1]]["id"]
-            available_slots = self.topology.graph["available_slots"][eid]
-            numerator = 0
-            denominator = 0
-            first_slot, val, length = CustomRMSAEnv.rle(available_slots)
-
-            for g in self.granularities:
-                numerator += np.dot(val, np.floor(length/float(g))).flatten()[0]
-                denominator += np.floor(np.dot(val, length).flatten()/float(g))[0]
-            
-            # print("Edge, Numerator, denominator",edge, numerator, denominator)
-            if denominator != 0:
-                abp += float(numerator) / float(denominator)
+            abp += self.compute_fragmentation_abp_on_link(eid)
         return abp / len(self.topology.edges)
 
     def reward(self):
@@ -572,21 +630,6 @@ class CustomRMSAEnv(RMSAEnv):
         next_state["spectrum_initial_slot"] = self.get_spectrum_fr_score()
         
         return next_state, reward, done, info
-    
-    def get_number_slots_given_modulation(self, path, modulation):
-        """
-        Method that computes the number of spectrum slots necessary to accommodate the service request into the path.
-        The method already adds the guardband.
-        """
-        return (
-            math.ceil(
-                self.current_service.bit_rate
-                / (modulation.spectral_efficiency * self.channel_width)
-            )
-            + 1
-        )
-    
-    
         
     def get_available_blocks(self, path, modulation=None):
         # get available slots across the whole path
@@ -608,11 +651,7 @@ class CustomRMSAEnv(RMSAEnv):
             )
         else:
             # getting the number of slots necessary for this service across this path
-            slots = self.get_number_slots_given_modulation(
-                self.k_shortest_paths[
-                    self.current_service.source, self.current_service.destination
-                ][path], modulation
-            )
+            slots = self.get_number_slots_given_modulation(modulation)
             
         # getting the blocks
         initial_indices, values, lengths = RMSAEnv.rle(available_slots)
@@ -649,11 +688,7 @@ class CustomRMSAEnv(RMSAEnv):
 
             for mod_idx in range(len(self.topology.graph['modulations'])):
                 modulation:Modulation = self.topology.graph['modulations'][mod_idx]
-                slots = self.get_number_slots_given_modulation(
-                    self.k_shortest_paths[
-                        self.current_service.source, self.current_service.destination
-                    ][path_idx], modulation
-                )
+                slots = self.get_number_slots_given_modulation(modulation)
 
                 fp = spectrum_feature_points(available_slots, slots)
                 spec_mask[path_idx][mod_idx] = fp

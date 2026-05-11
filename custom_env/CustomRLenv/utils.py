@@ -6,7 +6,6 @@ import re
 from itertools import islice
 from dataclasses import dataclass, field
 from typing import Optional, Sequence, Tuple, Union
-
 from ..optical_rl_gym.utils import Service, Path, Modulation
 
 
@@ -120,6 +119,14 @@ def distance(origin, destination):
 
     return d
 
+def compute_number_of_slots(bit_rate: float, modulation: Modulation):
+    return (
+        math.ceil(
+            bit_rate
+            / (modulation.spectral_efficiency * 12.5)
+        )
+        + 1
+    )
 
 def read_txt_file(file, undirected_file=True):
     graph = nx.DiGraph()
