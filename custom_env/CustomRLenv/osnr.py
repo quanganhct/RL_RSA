@@ -3,7 +3,6 @@ from math import pi
 from math import log, exp, asinh, log10, ceil
 from env import constant
 from custom_env.CustomRLenv.utils import compute_number_of_slots
-from custom_env.CustomRLenv.CustomRMSAEnv import CustomRMSAEnv
 import numpy as np
 
 from typing import List, Collection
@@ -179,7 +178,7 @@ def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=T
     return osnr, ase, nli
 
 # Return min osnr gap, together with service_id
-def compute_min_gap_osnr(env: CustomRMSAEnv, new_service: Service, path: Path, modulation: Modulation, \
+def compute_min_gap_osnr(env: RMSAEnv, new_service: Service, path: Path, modulation: Modulation, \
                          initial_slot: int, running_service: List[Service]):
     beta_2: float = -21.3e-27  
     gamma: float = 1.3e-3  
