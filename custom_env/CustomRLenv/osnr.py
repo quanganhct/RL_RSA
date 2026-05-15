@@ -165,6 +165,7 @@ def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=T
     list_running_service = env.topology.graph["running_services"]
     set_running_service_idx = set([s.service_id for s in list_running_service])
     sid_set = set_running_service_idx.intersection(current_service.nli_inf_from.keys())
+    sid_set.add(current_service.service_id)
 
     power_nli = sum([current_service.nli_inf_from[sid] for sid in sid_set])
     nli = power_nli / current_service.launch_power

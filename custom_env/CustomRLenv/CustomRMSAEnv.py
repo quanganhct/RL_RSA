@@ -15,7 +15,7 @@ from typing import List
 
 from custom_env.CustomRLenv.utils import Path, Modulation, Service, spectrum_feature_points
 from env import constant
-from custom_env.CustomRLenv.osnr import calculate_osnr, compute_ase_nli, compute_min_gap_osnr
+from custom_env.CustomRLenv.osnr import eval_osnr, compute_ase_nli, compute_min_gap_osnr
 
 class CustomRMSAEnv(RMSAEnv):
     """
@@ -138,12 +138,7 @@ class CustomRMSAEnv(RMSAEnv):
             self.candidate_paths_minimum_osnr[(src, dst)] = candidate_p_minimum_osnr
             self.candidate_paths_inband_xt[(src, dst)] = candidate_p_inband_xt
             self.candidate_paths_impairment[(src, dst)] = candidate_p_impairment
-     
-    
-    #TODO: 1. add minimum gap osnr - threshold of the services that shared link with the path
-    def get_candidate_path_features(self):
-        pass
-    
+         
     def get_candidate_paths(self):
         if not hasattr(self, "current_service"):
             return [np.zeros(1) for i in range(self.max_num_path)]
@@ -295,6 +290,29 @@ class CustomRMSAEnv(RMSAEnv):
                                              H_e, min_snr_gap]])
             features.append(edge_vec)
         return np.array(features, dtype=np.float32)
+
+    #Return minimum gap osnr - threshold of the services that shared link with the path
+    def get_candidate_path_features(self, path:Path):
+        s: Service
+        min_gap = 5
+        shared_services = self.get_running_service_share_links(path)
+        running_services = self.topology.graph["running_services"]
+        set_running_service_idx = set([s.service_id for s in running_services])
+        if len(shared_services) == 0:
+            return min_gap
+
+        for s in shared_services:
+            power_nli = sum([s.nli_inf_from[sid] if sid in set_running_service_idx else 0 \
+                             for sid in s.nli_inf_from.keys()])
+            nli = power_nli / s.launch_power
+            ase = s.ase_inf / s.launch_power
+            osnr = nli + ase
+
+            osnr = 10 * np.log10(1 / osnr)
+            gap = osnr - s.path.current_modulation.minimum_osnr
+            min_gap = min(min_gap, gap)
+
+        return min_gap
 
     # Path features for modulation selection
     def get_path_features(self, path_idx):
