@@ -301,7 +301,10 @@ class CustomRMSAEnv(RMSAEnv):
         if len(shared_services) == 0:
             return min_gap
 
-        for s in shared_services:
+        for s in self.topology.graph["running_services"]:
+            if s.service_id not in shared_services:
+                continue
+
             power_nli = sum([s.nli_inf_from[sid] if sid in set_running_service_idx else 0 \
                              for sid in s.nli_inf_from.keys()])
             nli = power_nli / s.launch_power
@@ -323,9 +326,9 @@ class CustomRMSAEnv(RMSAEnv):
         frag_score = np.zeros(len(utils.modulations))
         nbslot_array = np.zeros(len(utils.modulations))
 
-        for i in len(utils.modulations):
+        for i in range(len(utils.modulations)):
             mod:Modulation = utils.modulations[i]
-            if mod.spectral_efficiency > self.current_service.best_modulation.spectral_efficiency:
+            if mod.spectral_efficiency > selected_path.best_modulation.spectral_efficiency:
                 continue
 
             nb_slot = self.get_number_slots_given_modulation(mod)
@@ -333,8 +336,8 @@ class CustomRMSAEnv(RMSAEnv):
 
             # Compute abp frag of the edges on the links of @path_idx for each modulation
             abp = 0
-            for i in range(len(selected_path.node_list)-1):
-                link_id = self.topology[selected_path.node_list[i]][selected_path.node_list[i+1]]["id"]
+            for j in range(len(selected_path.node_list)-1):
+                link_id = self.topology[selected_path.node_list[j]][selected_path.node_list[j+1]]["id"]
                 abp += self.compute_fragmentation_abp_on_link_for_path_modulation(link_id, mod)
             abp = abp / (len(selected_path.node_list)-1)
             frag_score[i] = abp
@@ -344,9 +347,8 @@ class CustomRMSAEnv(RMSAEnv):
     # Modulation features for slot selection
     def get_modulation_features(self, path_idx, modulation_idx):
         available_slots = super().get_available_slots(
-                self.k_shortest_paths[
-                    self.current_service.source, self.current_service.destination
-                ][path_idx])
+                self.k_shortest_paths[self.current_service.source, self.current_service.destination]\
+                    [path_idx])
         
         selected_path:Path = self.k_shortest_paths[
                         self.current_service.source, self.current_service.destination
@@ -358,8 +360,8 @@ class CustomRMSAEnv(RMSAEnv):
         shared_running_services = self.get_running_service_share_links(selected_path)
         #TODO: min gap (SNR - SNRT) for all the service sharing links with @path_idx on a whole spectrum
         min_gap = np.zeros(len(fp))
-        for i in range(len(fp)):
-            if available_slots[i] == 0:
+        for i in range(len(fp)-slots+1):
+            if available_slots[i] == 0 or fp[i] == 0:
                 continue
 
             mgap, sid = compute_min_gap_osnr(self, self.current_service, selected_path, \
@@ -367,11 +369,13 @@ class CustomRMSAEnv(RMSAEnv):
             min_gap[i] = mgap
         return fp, min_gap
 
-    def get_running_service_share_links(self, path:Path) -> List[Service]:
+    def get_running_service_share_links(self, path:Path) -> List[int]:
         _result = set()
         for i in range(len(path.node_list)-1):
             s = self.topology[path.node_list[i]][path.node_list[i+1]]["running_services"]
-            _result.update(s)
+            if len(s) > 0:
+                set_id = set([service.service_id for service in s])
+                _result.update(set_id)
         return list(_result)
 
     # -----------------------------
@@ -631,6 +635,8 @@ class CustomRMSAEnv(RMSAEnv):
 
         # Keep demand embedding and impairment
         next_state["demand_embedding"] = self.compute_demand_embedding()
+
+        self.get_feature_for_new_service(self.current_service)
         
         # if "path" in info:
         #     path_idx = info["path"]
@@ -649,6 +655,20 @@ class CustomRMSAEnv(RMSAEnv):
         
         return next_state, reward, done, info
         
+    def get_feature_for_new_service(self, service:Service):
+        src, dest = service.source, service.destination
+        num_path = len(self.k_shortest_paths[src, dest])
+
+        for i in range(num_path):
+            # print("I", i)
+            path:Path = self.k_shortest_paths[src, dest][i]
+            self.get_path_features(i)
+
+            for j in range(len(utils.modulations)):
+                m:Modulation = utils.modulations[j]
+                if m.spectral_efficiency <= path.best_modulation.spectral_efficiency:
+                    self.get_modulation_features(i, j)
+
     def get_available_blocks(self, path, modulation=None):
         # get available slots across the whole path
         # 1 if slot is available across all the links
