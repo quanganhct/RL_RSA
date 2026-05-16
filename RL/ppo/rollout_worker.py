@@ -66,7 +66,7 @@ class RolloutWorker:
             path_action, path_logprob, cache = self.policy.act_path(obs)
             print(f"path_action  = {path_action}")
 
-            obs, _ = self.env.step_path(path_action)
+            obs, _ = self.env.step_path(obs, path_action)
             print(f"path_features shape = {obs['path_features'].shape}")
  
 
@@ -83,7 +83,7 @@ class RolloutWorker:
 
             cache["selected_mod_emb"] = mod_emb
 
-            obs, _ = self.env.step_modulation(mod_action)
+            obs, _ = self.env.step_modulation(obs, mod_action)
 
             trajectory["stage_ids"].append(1)
 

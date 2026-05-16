@@ -103,7 +103,12 @@ env_args = dict(topology=topology,
 # Environment setup
 env = CustomRMSAEnv(**env_args)
 
+obs = env.customreset(False)
+a = env.step_path(obs, 0)
+b = env.step_modulation(obs, 0)
+next_state, reward, done, info = env.step(0)
 
+#%%
 # ============================================================
 # MODEL
 # ============================================================
@@ -115,9 +120,10 @@ num_paths = env.k_paths
 num_mods =  len(env.topology.graph['modulations'])
 num_spectra = env.num_spectrum_resources
 
-edge_dim = env.get_edge_features().shape[1]
-slot_dim = env.get_modulation_features().shape[1]
-path_feature_dim= env.get_path_features().shape[1]
+edge_dim =  4 * env.topology.number_of_edges()
+path_feature_dim= 1 + 1 + 2 * len(env.topology.graph['modulations'])
+slot_dim =  2 * env.num_spectrum_resources 
+
 
 policy = HierarchicalRMSAPolicy(
     edge_dim=edge_dim,
