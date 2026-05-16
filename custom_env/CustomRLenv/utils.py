@@ -275,6 +275,8 @@ def get_topology(file_name, topology_name, k_paths=5, undirected_file=True, sndf
         topology = read_sndlib_txt_file(file_name)
     idp = 0
     num_path = 0
+
+    max_hop = 0
     for idn1, n1 in enumerate(topology.nodes()):
         for idn2, n2 in enumerate(topology.nodes()):
             if idn1 < idn2:
@@ -295,6 +297,7 @@ def get_topology(file_name, topology_name, k_paths=5, undirected_file=True, sndf
                 for path, length, modulation in zip(
                     paths, lengths, selected_modulations
                 ):
+                    max_hop = max(max_hop, len(path) - 1)
                     objs.append(
                         Path(
                             path_id=idp,
@@ -311,6 +314,7 @@ def get_topology(file_name, topology_name, k_paths=5, undirected_file=True, sndf
     topology.graph["name"] = topology_name
     topology.graph["ksp"] = k_shortest_paths
     topology.graph["max_numpath"] = num_path
+    topology.graph["max_hop"] = max_hop
     if modulations is not None:
         topology.graph["modulations"] = modulations
     topology.graph["k_paths"] = k_paths

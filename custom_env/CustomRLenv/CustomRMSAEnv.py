@@ -252,6 +252,8 @@ class CustomRMSAEnv(RMSAEnv):
         for link_id, link in enumerate(self.topology.edges()):
             # Availability vector: 1=free, 0=occupied
             s_e = self.topology.graph["available_slots"][link_id]
+            first_slot, val, length = CustomRMSAEnv.rle(s_e)
+            max_length_available_block = max(length)
 
             # Physical length
             l_e = self.topology.edges[link]['length']  # km or meters
