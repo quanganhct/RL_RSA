@@ -10,7 +10,7 @@ import networkx as nx
 from custom_env.optical_rl_gym.envs.rmsa_env import RMSAEnv
 from custom_env.CustomRLenv import utils
 import math
-
+import torch
 from typing import List
 
 from custom_env.CustomRLenv.utils import Path, Modulation, Service, spectrum_feature_points, transform_graph
@@ -868,38 +868,49 @@ class CustomRMSAEnv(RMSAEnv):
     def _obs(self, obs):
         
         
-        mods_mask = None
-        slots_mask = None
+        mod_mask = None
+        slot_mask = None
         
         # GRAPH STATE
-        obs["edge_features"] = self.get_edge_features()
-        obs["edge_index"] = self.edge_index()
+        edge_features = self.get_edge_features()
+        obs["edge_features"] =  torch.tensor(edge_features, 
+                                         dtype=torch.float32)
+        # the library can be updated so that nodes are directly from 0
+        edge_index = self.edge_index() 
+        obs["edge_index"] = torch.tensor(edge_index, dtype=torch.long).T - 1  # [2, num_edges]
         
      
         # PATH CANDIDATES [should be list of list as size might differ]
         obs["candidate_paths"] =  self.get_candidate_paths()
         
-        path_mask = self.get_paths_mask()    
+        path_mask = self.get_paths_mask()  
+        path_mask = torch.tensor(path_mask, dtype=torch.bool)  
         # PATH FEATURES  
         if self.selected_path_id is None:
             obs["path_features"] = None
             obs["mod_features"] = None
             
         else:
-            obs["path_features"]  = self.get_path_features(
-                self.selected_path_id
-            )
+            path_features  = self.get_path_features(
+                self.selected_path_id)
+             
+            obs["path_features"]  =  torch.tensor(path_features, 
+                                         dtype=torch.float32)
             mod_mask = self.get_mods_mask(self.selected_path_id)
+            mod_mask = torch.tensor(mod_mask, dtype=torch.bool)
             
             # Modulation FEATURES 
             if self.selected_mod_id is None:
                 obs["mod_features"] = None
             else:
-                obs["mod_features"]  = self.get_modulation_features(self.selected_path_id,
+                mod_features =  self.get_modulation_features(self.selected_path_id,
                     self.selected_mod_id
                 )
+                obs["mod_features"]  = torch.tensor(mod_features, 
+                                         dtype=torch.float32)
                 slot_mask = self.get_slot_mask(self.selected_path_id,
                     self.selected_mod_id)
+                slot_mask = torch.tensor(slot_mask, dtype=torch.bool)
             
      
         # MASKS
