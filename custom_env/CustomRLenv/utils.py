@@ -72,7 +72,7 @@ modulations = (
         name="QPSK",
         maximum_length=2_000,
         spectral_efficiency=2,
-        minimum_osnr=12.6,
+        minimum_osnr=15.5,
         inband_xt=-17,
     ),
     Modulation(
