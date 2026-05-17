@@ -238,7 +238,7 @@ class PathTransformer(nn.Module):
         # ====================================================
         # SINGLE-SAMPLE SUPPORT
         # ====================================================
-
+        print(f'path candidate = {candidate_paths.shape} ')
         single_sample = False
 
         if candidate_paths.dim() == 2:
@@ -256,31 +256,102 @@ class PathTransformer(nn.Module):
         # ====================================================
         # SHAPES
         # ====================================================
-
+        print(f'path candidate 2 = {candidate_paths.shape} ')
         B, K, L = candidate_paths.shape
 
         _, E, D_edge = edge_embeddings.shape
 
+        print(f'edge_embeddings = {edge_embeddings.shape} ')
         # ====================================================
         # GATHER EDGE EMBEDDINGS
         # ====================================================
 
         # candidate_paths:
         # [B,K,L]
+        
+        # expanded_paths = candidate_paths.unsqueeze(-1).expand(
+        #     -1, -1, -1, D_edge
+        # )
+        # print(f'expanded_paths = {expanded_paths.shape} ')
+        
 
-        expanded_paths = candidate_paths.unsqueeze(-1).expand(
-            -1, -1, -1, D_edge
-        )
+        # expanded_edges = edge_embeddings.unsqueeze(1).expand(
+        #     -1, K, -1, -1
+        # )
+        # print(f'expanded_edges = {expanded_edges.shape} ')
 
-        expanded_edges = edge_embeddings.unsqueeze(1).expand(
-            -1, K, -1, -1
-        )
+        # path_edges = torch.gather(
+        #     expanded_edges,
+        #     2,
+        #     expanded_paths
+        # )
+        
+        # Replace all padding values (-1) with 0 temporarily.
+        # This is necessary because tensor indexing cannot use negative
+        # padding indices in this context.
+        # Real edge index 0 is still valid; we will later use the original
+        # paths tensor to distinguish true 0s from padded positions.
+        safe_paths = candidate_paths.clamp(min=0)
 
-        path_edges = torch.gather(
-            expanded_edges,
-            2,
-            expanded_paths
-        )
+        # Create batch indices for advanced indexing.
+        #
+        # torch.arange(B):
+        # [0, 1, 2, ..., B-1]
+        #
+        # .view(B,1,1) reshapes it so broadcasting works against
+        # safe_paths of shape (B, K, L).
+        #
+        # Result shape:
+        # (B, 1, 1)
+        #
+        # Example for B=2:
+        # [[[0]],
+        #  [[1]]]
+        #
+        # This tells PyTorch which batch element to pull edges from.
+        batch_idx = torch.arange(B, device=edge_embeddings.device).view(B, 1, 1)
+
+
+
+        # Advanced indexing:
+        #
+        # edges shape:
+        # (B, E, D)
+        #
+        # batch_idx shape:
+        # (B, 1, 1)
+        #
+        # safe_paths shape:
+        # (B, K, L)
+        #
+        # Operation:
+        # edges[batch_idx, safe_paths]
+        #
+        # means:
+        # "For each batch b, select edge embeddings using the edge
+        # indices stored in safe_paths[b]."
+        #
+        # Output shape:
+        # (B, K, L, D)
+        #
+        # Each edge index becomes its corresponding embedding vector.
+        path_edges = edge_embeddings[batch_idx, safe_paths]
+
+
+
+        # paths == -1 creates a boolean mask identifying padded entries.
+        mask = (candidate_paths == -1)
+
+        # We set those  padded entries embeddings to zero vectors so they do not contribute
+        # to later computations (attention, pooling, averaging, etc.).
+        #
+        # Output remains shape:
+        # (B, K, L, D)
+
+        path_edges[mask] = 0
+        
+        
+        #------------
 
         # path_edges:
         # [B,K,L,D]

@@ -122,7 +122,7 @@ num_spectra = env.num_spectrum_resources
 
 edge_dim = 4 # env.topology.number_of_edges()
 path_feature_dim= 1 + 1 + 2 * len(env.topology.graph['modulations'])
-slot_dim =  2 * env.num_spectrum_resources 
+slot_dim =  2 
 
 
 policy = HierarchicalRMSAPolicy(

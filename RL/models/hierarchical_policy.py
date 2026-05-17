@@ -194,7 +194,7 @@ class HierarchicalRMSAPolicy(nn.Module):
         mod_emb = cache["selected_mod_emb"]#.unsqueeze(0)
 
         logits, slot_emb = self.slot_policy(
-            obs["slot_features"],#.unsqueeze(0),
+            obs["mod_features"],#.unsqueeze(0),
             path_emb,
             mod_emb,
             obs["action_masks"]["slot"]
@@ -309,7 +309,7 @@ class HierarchicalRMSAPolicy(nn.Module):
         # =======================================================
     
         slot_logits, slot_emb = self.slot_policy(
-            obs["slot_features"],
+            obs["mod_features"],
             selected_path_emb,
             mod_emb,
             obs["action_masks"]["slot"]

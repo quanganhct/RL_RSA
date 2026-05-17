@@ -294,6 +294,11 @@ class SpectrumPolicy(nn.Module):
         # ----------------------------------------------------
 
         single_sample = False
+        
+        print(f"slot feature = {slot_features.shape}")
+        print(f"path_embedding = {path_embedding.shape}")
+        print(f"mod_embedding = {mod_embedding.shape}")
+        
 
         if slot_features.dim() == 2:
 

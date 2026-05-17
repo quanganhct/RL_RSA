@@ -394,8 +394,8 @@ class CustomRMSAEnv(RMSAEnv):
     def get_modulation_features(self, path_idx, modulation_idx):
         
         if  self.current_service is None:
-            num_feature = 2 * self.num_spectrum_resources 
-            return np.zeros(num_feature)
+            num_feature = 2  
+            return np.zeros([self.num_spectrum_resources, num_feature])
         
         available_slots = super().get_available_slots(
                 self.k_shortest_paths[
@@ -420,7 +420,7 @@ class CustomRMSAEnv(RMSAEnv):
                                              modulation, i, shared_running_services)
             min_gap[i] = mgap
         
-        mod_vec = np.concatenate([fp, min_gap])
+        mod_vec = np.array([fp, min_gap]).T
         return mod_vec
 
     def get_running_service_share_links(self, path:Path) -> List[int]:
@@ -1003,7 +1003,7 @@ class CustomRMSAEnv(RMSAEnv):
                 "mod": mod_mask,
                 "slot": slot_mask
             }
-        obs["masks"] = mask
+        obs["action_masks"] = mask
         
         return obs
         

@@ -95,8 +95,9 @@ class RolloutWorker:
                 obs,
                 cache
             )
-
-            obs, reward, done, _ = self.env.step_slot(slot_action)
+            
+            print(f'action path mode slot =  {path_action}, {mod_action}, {slot_action}')
+            obs, reward, done, _ = self.env.step(slot_action)
 
             trajectory["stage_ids"].append(2)
 
