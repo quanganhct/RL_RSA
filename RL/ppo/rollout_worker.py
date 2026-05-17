@@ -29,7 +29,7 @@ class RolloutWorker:
 
     def collect_episode(self):
 
-        obs = self.env.reset()
+        obs = self.env.customreset(False)
 
         trajectory = {
 

@@ -33,7 +33,7 @@ class CustomRMSAEnv(RMSAEnv):
         self.num_nodes = self.topology.number_of_nodes()
         self.node_betweenness = nx.betweenness_centrality(self.topology)
         self._update_candidate_paths()
-
+        self.max_path_len = self.topology.graph['max_hop']
         # In case of alpha shortest path, @max_num_path is the maximum path per pair nodes, and it is 
         # k_paths in case of k shortest path
         self.max_num_path = self.topology.graph["max_numpath"]
@@ -51,6 +51,8 @@ class CustomRMSAEnv(RMSAEnv):
         self.generated_req_lifetime = []
         
         self.edge_index =  [tuple(map(int, t)) for t in self.topology.edges()]
+        
+        self.edge_id = {e:i for i, e in enumerate(self.edge_index)}
         
        
 
@@ -145,17 +147,54 @@ class CustomRMSAEnv(RMSAEnv):
      
     
     #TODO: 1. add minimum gap osnr - threshold of the services that shared link with the path
-    def get_candidate_path_features(self):
-        pass
+    def get_candidate_path_features(self, path:Path):
+        s: Service
+        min_gap = 5
+        shared_services = self.get_running_service_share_links(path)
+        running_services = self.topology.graph["running_services"]
+        set_running_service_idx = set([s.service_id for s in running_services])
+        if len(shared_services) == 0:
+            return min_gap
+
+        for s in self.topology.graph["running_services"]:
+            if s.service_id not in shared_services:
+                continue
+
+            power_nli = sum([s.nli_inf_from[sid] if sid in set_running_service_idx else 0 \
+                             for sid in s.nli_inf_from.keys()])
+            nli = power_nli / s.launch_power
+            ase = s.ase_inf / s.launch_power
+            osnr = nli + ase
+
+            osnr = 10 * np.log10(1 / osnr)
+            gap = osnr - s.path.current_modulation.minimum_osnr
+            min_gap = min(min_gap, gap)
+
+        return min_gap
     
     def get_candidate_paths(self):
         if not hasattr(self, "current_service"):
             return [np.zeros(1) for i in range(self.max_num_path)]
-
+        
+        
         src = self.current_service.source
         dst = self.current_service.destination
+        candidates = self.candidate_paths[(src, dst)] 
         
-        return self.candidate_paths[(src, dst)]
+        
+        path_features = []
+        pad_paths = []
+        
+        for path_idx, path in enumerate(self.k_shortest_paths[src, dst]):
+            # print(f"path = {path}")
+            path_feat = self.get_candidate_path_features(path)
+            path_features.append(path_feat)
+            
+            pad_path = candidates[path_idx] + [-1] * (self.max_path_len - len(candidates[path_idx]))
+            
+            pad_paths.append(pad_path)
+        
+        return np.array(pad_paths), np.array(path_features)
     
     def get_candidate_paths_length(self):
         if not hasattr(self, "current_service"):
@@ -265,6 +304,9 @@ class CustomRMSAEnv(RMSAEnv):
         for link_id, link in enumerate(self.topology.edges()):
             # Availability vector: 1=free, 0=occupied
             s_e = self.topology.graph["available_slots"][link_id]
+            
+            first_slot, val, length = CustomRMSAEnv.rle(s_e)
+            max_length_available_block = max(length)
 
             # Physical length
             l_e = self.topology.edges[link]['length']  # km or meters
@@ -293,12 +335,14 @@ class CustomRMSAEnv(RMSAEnv):
             min_snr_gap = self.compute_min_gap_snr_on_link(link)
 
             # edge_vec = np.concatenate([s_e, [l_e, osnr, nli, ase, H_e]])
+            
+            #TODO get maximum available slot of each link
 
-            #TODO: add available slots as feature
+            #TODO: add max available slots as feature and remove utilization
             edge_vec = np.array([H_e,
                                   min_snr_gap, 
                                   running_services, 
-                                  utilization])
+                                  max_length_available_block])
             
             # edge_vec = np.concatenate([s_e, [l_e, 
             #                                  utilization, 
@@ -311,8 +355,7 @@ class CustomRMSAEnv(RMSAEnv):
 
     # Path features for modulation selection
     def get_path_features(self, path_idx):
-        num_feature = 1 + 1 + 2 * len(self.topology.graph['modulations'])
-        return np.zeros(num_feature)
+        
         if  self.current_service is None:
             num_feature = 1 + 1 + 2 * len(self.topology.graph['modulations'])
             return np.zeros(num_feature)
@@ -328,7 +371,7 @@ class CustomRMSAEnv(RMSAEnv):
         for i in range(len(utils.modulations)):
             mod:Modulation = utils.modulations[i]
             print(self.current_service)
-            if mod.spectral_efficiency > self.current_service.best_modulation.spectral_efficiency:
+            if mod.spectral_efficiency > selected_path.best_modulation.spectral_efficiency:
                 continue
 
             nb_slot = self.get_number_slots_given_modulation(mod)
@@ -336,8 +379,8 @@ class CustomRMSAEnv(RMSAEnv):
 
             # Compute abp frag of the edges on the links of @path_idx for each modulation
             abp = 0
-            for i in range(len(selected_path.node_list)-1):
-                link_id = self.topology[selected_path.node_list[i]][selected_path.node_list[i+1]]["id"]
+            for j in range(len(selected_path.node_list)-1):
+                link_id = self.topology[selected_path.node_list[j]][selected_path.node_list[j+1]]["id"]
                 abp += self.compute_fragmentation_abp_on_link_for_path_modulation(link_id, mod)
             abp = abp / (len(selected_path.node_list)-1)
             frag_score[i] = abp
@@ -349,8 +392,7 @@ class CustomRMSAEnv(RMSAEnv):
 
     # Modulation features for slot selection
     def get_modulation_features(self, path_idx, modulation_idx):
-        num_feature = 2 * self.num_spectrum_resources 
-        return np.zeros(num_feature)
+        
         if  self.current_service is None:
             num_feature = 2 * self.num_spectrum_resources 
             return np.zeros(num_feature)
@@ -371,7 +413,7 @@ class CustomRMSAEnv(RMSAEnv):
         #TODO: min gap (SNR - SNRT) for all the service sharing links with @path_idx on a whole spectrum
         min_gap = np.zeros(len(fp))
         for i in range(len(fp)):
-            if available_slots[i] == 0:
+            if available_slots[i] == 0 or fp[i] == 0:
                 continue
 
             mgap, sid = compute_min_gap_osnr(self, self.current_service, selected_path, \
@@ -381,11 +423,13 @@ class CustomRMSAEnv(RMSAEnv):
         mod_vec = np.concatenate([fp, min_gap])
         return mod_vec
 
-    def get_running_service_share_links(self, path:Path) -> List[Service]:
+    def get_running_service_share_links(self, path:Path) -> List[int]:
         _result = set()
         for i in range(len(path.node_list)-1):
             s = self.topology[path.node_list[i]][path.node_list[i+1]]["running_services"]
-            _result.update(s)
+            if len(s) > 0:
+                set_id = set([service.service_id for service in s])
+                _result.update(set_id)
         return list(_result)
 
     # -----------------------------
@@ -536,7 +580,7 @@ class CustomRMSAEnv(RMSAEnv):
                     self.current_service.launch_power = self.launch_power
                     
                     #TODO make this work I am using 0,0,0 to check the code
-                    osnr, ase, nli = 0,0,0 #compute_ase_nli(self.current_service)
+                    osnr, ase, nli = compute_ase_nli(self, self.current_service)
                     if osnr >= selected_path.current_modulation.minimum_osnr + constant.osnr_margin:
 
                         self._provision_path(
@@ -764,15 +808,21 @@ class CustomRMSAEnv(RMSAEnv):
         dst = self.current_service.destination
         
         path_mask = np.ones(dim)
+        num_paths = len(self.k_shortest_paths[src, dst])
         
         
         # Masking sheme
         for path_idx in range(dim):
             # get available block given best
-            initial_indices, _= self.get_available_blocks(path_idx)
-            #if no path with best modultation mask path + mod + spec
-            if len(initial_indices) == 0:
-                path_mask[path_idx] = 0
+            if path_idx < num_paths:
+                initial_indices, _= self.get_available_blocks(path_idx)
+                #if no path with best modultation mask path + mod + spec
+                if len(initial_indices) == 0:
+                    path_mask[path_idx] = 0
+            else:# mask paths that don't exist
+                path_mask[path_idx:] = [0] * (dim - num_paths)
+                break
+                
                 
         return path_mask
     
@@ -911,7 +961,11 @@ class CustomRMSAEnv(RMSAEnv):
         
      
         # PATH CANDIDATES [should be list of list as size might differ]
-        obs["candidate_paths"] =  self.get_candidate_paths()
+        candidate_paths, candidate_paths_features =  self.get_candidate_paths()
+        
+        obs["candidate_paths"] = torch.tensor(candidate_paths, dtype=torch.long)
+        obs["candidate_paths_features"] = torch.tensor(candidate_paths_features, 
+                                         dtype=torch.float32)
         
         path_mask = self.get_paths_mask()  
         path_mask = torch.tensor(path_mask, dtype=torch.bool)  

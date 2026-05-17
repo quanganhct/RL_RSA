@@ -72,7 +72,7 @@ modulations = (
         name="QPSK",
         maximum_length=2_000,
         spectral_efficiency=2,
-        minimum_osnr=12.6,
+        minimum_osnr=15.5,
         inband_xt=-17,
     ),
     Modulation(
@@ -130,6 +130,7 @@ def compute_number_of_slots(bit_rate: float, modulation: Modulation):
 
 def read_txt_file(file, undirected_file=True):
     graph = nx.DiGraph()
+    graph.graph['dict_link_id'] = {}
     num_nodes = 0
     num_links = 0
     id_link = 0
@@ -153,6 +154,8 @@ def read_txt_file(file, undirected_file=True):
                     weight=1,
                     length=int(info[2]),
                 )
+                graph.graph['dict_link_id'][id_link] = graph.edges[info[0], info[1]]
+
                 id_link += 1
 
                 if undirected_file:
@@ -164,8 +167,16 @@ def read_txt_file(file, undirected_file=True):
                         weight=1,
                         length=int(info[2]),
                     )
+                    graph.graph['dict_link_id'][id_link] = graph.edges[info[1], info[0]]
                     id_link += 1
 
+    attrs = {}
+    id = 0
+    for src, dst in graph.edges:
+        attrs[str(src), str(dst)] = id
+        id += 1
+
+    nx.set_edge_attributes(graph, attrs, 'id')
     return graph
 
 # File from sndlib, refer to data/germany/germany.txt for file format
@@ -190,6 +201,7 @@ def read_sndlib_txt_file(file):
     map_node_name = {}
 
     graph = nx.DiGraph()
+    graph.graph['dict_link_id'] = {}
 
     with open(file, 'r') as f:
         for line in f:
@@ -222,6 +234,7 @@ def read_sndlib_txt_file(file):
                     index=link_id,
                     weight=1,
                     length=int(d))
+                graph.graph['dict_link_id'][link_id] = graph.edges[str(map_node_name[city1].id), str(map_node_name[city2].id)]
                 link_id += 1
 
                 graph.add_edge(str(map_node_name[city2].id),
@@ -231,6 +244,14 @@ def read_sndlib_txt_file(file):
                     weight=1,
                     length=int(d))
                 link_id += 1
+
+    attrs = {}
+    id = 0
+    for src, dst in graph.edges:
+        attrs[str(src), str(dst)] = id
+        id += 1
+
+    nx.set_edge_attributes(graph, attrs, 'id')
     return graph
 
 def get_precomputed_path(G, source, target, k=5, alpha=2, weight='weight'):
@@ -275,6 +296,8 @@ def get_topology(file_name, topology_name, k_paths=5, undirected_file=True, sndf
         topology = read_sndlib_txt_file(file_name)
     idp = 0
     num_path = 0
+
+    max_hop = 0
     for idn1, n1 in enumerate(topology.nodes()):
         for idn2, n2 in enumerate(topology.nodes()):
             if idn1 < idn2:
@@ -295,6 +318,7 @@ def get_topology(file_name, topology_name, k_paths=5, undirected_file=True, sndf
                 for path, length, modulation in zip(
                     paths, lengths, selected_modulations
                 ):
+                    max_hop = max(max_hop, len(path) - 1)
                     objs.append(
                         Path(
                             path_id=idp,
@@ -311,6 +335,7 @@ def get_topology(file_name, topology_name, k_paths=5, undirected_file=True, sndf
     topology.graph["name"] = topology_name
     topology.graph["ksp"] = k_shortest_paths
     topology.graph["max_numpath"] = num_path
+    topology.graph["max_hop"] = max_hop
     if modulations is not None:
         topology.graph["modulations"] = modulations
     topology.graph["k_paths"] = k_paths

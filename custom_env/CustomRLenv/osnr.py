@@ -65,7 +65,7 @@ def eval_osnr(env: RMSAEnv, current_service: Service):
 
         power_nli_span = nb_span * (current_service.launch_power / (current_service.bandwidth)) ** 3 * \
             (8 / (27 * pi * abs(beta_2))) * gamma ** 2 * l_eff * sum_phi * current_service.bandwidth
-        power_ase = nb_span * h_plank * current_service.center_frequency * \
+        power_ase = nb_span * current_service.bandwidth * h_plank * current_service.center_frequency * \
             (exp(2 * attenuation_normalized * constant.fiber_span * 1e3) - 1) * noise_figure_normalized
 
         print(current_service.launch_power, power_ase)
@@ -108,7 +108,7 @@ def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=T
     l_eff = (1 - np.exp(-2 * attenuation_normalized * constant.fiber_span * 1e3)) / (2 * attenuation_normalized)
 
     nli_coef = (8 / (27 * pi * abs(beta_2))) * gamma ** 2 * l_eff
-    ase_coef = h_plank * current_service.center_frequency * \
+    span_power_ase = current_service.bandwidth * h_plank * current_service.center_frequency * \
             (exp(2 * attenuation_normalized * constant.fiber_span * 1e3) - 1) * noise_figure_normalized
 
     firstime = False
@@ -132,7 +132,7 @@ def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=T
             nb_span = ceil(env.topology[src][dst]["length"] / constant.fiber_span)
 
             #ASE
-            current_service.ase_inf += nb_span * ase_coef
+            current_service.ase_inf += nb_span * span_power_ase
         
             #SCI
             current_service.nli_inf_from[current_service.service_id] += nb_span * \
@@ -172,15 +172,17 @@ def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=T
     ase = current_service.ase_inf / current_service.launch_power
     osnr = nli + ase
 
+    # print("P ASE, NLI", ase, nli)
+
     osnr = 10 * np.log10(1 / osnr)
     ase = 10 * np.log10(1 / ase)
     nli = 10 * np.log10(1 / nli)
 
     return osnr, ase, nli
 
-# Return min osnr gap, together with service_id
+# Return min osnr gap of all services that shared link with @path, together with service_id
 def compute_min_gap_osnr(env: RMSAEnv, new_service: Service, path: Path, modulation: Modulation, \
-                         initial_slot: int, running_service: List[Service]):
+                         initial_slot: int, running_service: List[int]):
     beta_2: float = -21.3e-27  
     gamma: float = 1.3e-3  
     h_plank: float = 6.626e-34  
@@ -201,7 +203,8 @@ def compute_min_gap_osnr(env: RMSAEnv, new_service: Service, path: Path, modulat
 
     nbslots = compute_number_of_slots(new_service.bit_rate, modulation)
     if not env.is_path_free(path, initial_slot, nbslots):
-        raise Exception("Slot conflict exception")
+        print("Initial slot %s, nb slot %s, spectrum %s"%(initial_slot, nbslots, env.num_spectrum_resources))
+        raise Exception("Not enough slot resource")
     
 
     attenuation_normalized = constant.attenuation_db_km / (2 * 10 * np.log10(np.exp(1)) * 1e3)
@@ -210,13 +213,8 @@ def compute_min_gap_osnr(env: RMSAEnv, new_service: Service, path: Path, modulat
     l_eff_a = 1 / (2 * attenuation_normalized)
     l_eff = (1 - np.exp(-2 * attenuation_normalized * constant.fiber_span * 1e3)) / (2 * attenuation_normalized)
 
-    nli_coef = (8 / (27 * pi * abs(beta_2))) * gamma ** 2 * l_eff
-    ase_coef = h_plank * new_service_center_frequency * \
-        (exp(2 * attenuation_normalized * constant.fiber_span * 1e3) - 1) * noise_figure_normalized
-
-
-    new_service_nli_from = dict([(s.service_id, 0) for s in running_service + [new_service]])
-    new_service_nli_to = dict([(s.service_id, 0) for s in running_service + [new_service]])
+    new_service_nli_from = dict([(s, 0) for s in running_service + [new_service.service_id]])
+    new_service_nli_to = dict([(s, 0) for s in running_service + [new_service.service_id]])
     ase_power = 0
 
     new_service_center_frequency = constant.frequency_start \
@@ -225,22 +223,28 @@ def compute_min_gap_osnr(env: RMSAEnv, new_service: Service, path: Path, modulat
     
     new_service_bandwidth = constant.frequency_slot_bandwidth * nbslots
     
+    nli_coef = (8 / (27 * pi * abs(beta_2))) * gamma ** 2 * l_eff
+    span_power_ase = new_service_bandwidth * h_plank * new_service_center_frequency * \
+        (exp(2 * attenuation_normalized * constant.fiber_span * 1e3) - 1) * noise_figure_normalized
+
     phi_sci = asinh(pi ** 2 * abs(beta_2) * (new_service_bandwidth) ** 2 / \
                             (4 * attenuation_normalized))
 
-    for i in range(len(new_service.path.node_list)-1):
-        src, dst = new_service.path.node_list[i], new_service.path.node_list[i+1]
+    for i in range(len(path.node_list)-1):
+        src, dst = path.node_list[i], path.node_list[i+1]
         nb_span = ceil(env.topology[src][dst]["length"] / constant.fiber_span)
 
         #ASE
-        ase_power += nb_span * ase_coef
+        ase_power += nb_span * span_power_ase
 
         #SCI
         new_service_nli_from[new_service.service_id] += nb_span * \
                             (env.launch_power / new_service_bandwidth) ** 3 * \
                             nli_coef * new_service_bandwidth * phi_sci
         
-        for service in running_service:
+        for service in env.topology.graph["running_services"]:
+            if service.service_id not in running_service:
+                continue
             if service.service_id != new_service.service_id:
                 d_frequency = abs(service.center_frequency - new_service_center_frequency)
                 phi_xci = np.log(abs(d_frequency + service.bandwidth/2) / \
@@ -275,7 +279,9 @@ def compute_min_gap_osnr(env: RMSAEnv, new_service: Service, path: Path, modulat
 
     result.append((osnr - modulation.minimum_osnr, new_service.service_id))
 
-    for service in running_service:
+    for service in env.topology.graph["running_services"]:
+        if service.service_id not in running_service:
+            continue
         sid_set = set_running_service_idx.intersection(service.nli_inf_from.keys())
         power_nli = sum([service.nli_inf_from[sid] for sid in sid_set])
         power_nli += new_service_nli_to[service.service_id]

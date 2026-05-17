@@ -108,7 +108,7 @@ a = env.step_path(obs, 0)
 b = env.step_modulation(obs, 0)
 next_state, reward, done, info = env.step(0)
 
-#%%
+
 # ============================================================
 # MODEL
 # ============================================================
@@ -116,11 +116,11 @@ next_state, reward, done, info = env.step(0)
 # Get environment info
 num_nodes = env.num_nodes
 num_edges = env.topology.number_of_edges()
-num_paths = env.k_paths
+num_paths = env.max_num_path
 num_mods =  len(env.topology.graph['modulations'])
 num_spectra = env.num_spectrum_resources
 
-edge_dim =  4 * env.topology.number_of_edges()
+edge_dim = 4 # env.topology.number_of_edges()
 path_feature_dim= 1 + 1 + 2 * len(env.topology.graph['modulations'])
 slot_dim =  2 * env.num_spectrum_resources 
 
