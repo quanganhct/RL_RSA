@@ -177,6 +177,7 @@ def read_txt_file(file, undirected_file=True):
         id += 1
 
     nx.set_edge_attributes(graph, attrs, 'id')
+    nx.set_edge_attributes(graph, attrs, 'index')
     return graph
 
 # File from sndlib, refer to data/germany/germany.txt for file format
@@ -252,6 +253,7 @@ def read_sndlib_txt_file(file):
         id += 1
 
     nx.set_edge_attributes(graph, attrs, 'id')
+    nx.set_edge_attributes(graph, attrs, 'index')
     return graph
 
 def get_precomputed_path(G, source, target, k=5, alpha=2, weight='weight'):

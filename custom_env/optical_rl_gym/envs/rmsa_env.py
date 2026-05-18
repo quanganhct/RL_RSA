@@ -666,8 +666,49 @@ class RMSAEnv(OpticalNetworkEnv):
             z = np.diff(np.append(-1, i))  # run lengths
             p = np.cumsum(np.append(0, z))[:-1]  # positions
             return p, ia[i], z
+    
+    def get_available_blocks(self, path, modulation=None):
+        # get available slots across the whole path
+        # 1 if slot is available across all the links
+        # zero if not
+        
+        available_slots = super().get_available_slots(
+            self.k_shortest_paths[
+                self.current_service.source, self.current_service.destination
+            ][path]
+        )
+        
+        if modulation is None:
+            # getting the number of slots necessary for this service across this path
+            slots = self.get_number_slots(
+                self.k_shortest_paths[
+                    self.current_service.source, self.current_service.destination
+                ][path]
+            )
+        else:
+            # getting the number of slots necessary for this service across this path
+            slots = self.get_number_slots_given_modulation(modulation)
+            
+        # getting the blocks
+        initial_indices, values, lengths = RMSAEnv.rle(available_slots)
 
-    def get_available_blocks(self, path):
+        result_index, result_len = [], []
+        for i in range(len(initial_indices)):
+            if values[i] == 0 or lengths[i] < slots:
+                continue
+
+            _slot = initial_indices[i]
+            _len = lengths[i]
+            while _len >= slots:
+                result_index.append(_slot)
+                result_len.append(_len)
+                _slot += 1
+                _len -= 1
+
+        return result_index, result_len
+    
+    
+    def get_available_blocks_old(self, path):
         # get available slots across the whole path
         # 1 if slot is available across all the links
         # zero if not

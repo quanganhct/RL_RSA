@@ -219,7 +219,7 @@ class GNNEncoder(nn.Module):
         edge_features : [E,F]
         edge_index    : [2,M]
         """
-        print(f'edge_features = {edge_features.shape}')
+        # print(f'edge_features = {edge_features.shape}')
         x = self.input_proj(edge_features)
 
         for layer in self.layers:

@@ -26,7 +26,7 @@ class SharedEncoder(nn.Module):
         )
 
     def forward(self, obs):
-        print(f"edge_features {obs['edge_features'].shape}  edge_features {obs['edge_index'].shape} ")
+        # print(f"edge_features {obs['edge_features'].shape}  edge_features {obs['edge_index'].shape} ")
 
         return self.gnn(
             obs["edge_features"],
@@ -106,7 +106,7 @@ class HierarchicalRMSAPolicy(nn.Module):
             obs["candidate_paths"]
         )
         
-        print(f'path_embed jojo = {path_emb.shape}')
+        # print(f'path_embed jojo = {path_emb.shape}')
 
         logits = path_emb.mean(dim=-1)
 
@@ -136,7 +136,7 @@ class HierarchicalRMSAPolicy(nn.Module):
             obs["candidate_paths"]
         )
         
-        print(f'path_embed jojo = {path_emb.shape}')
+        # print(f'path_embed jojo = {path_emb.shape}')
         mask = obs["action_masks"]["path"]
 
         logits = self.path_policy(path_emb, mask) #path_emb.mean(dim=-1)
@@ -164,14 +164,14 @@ class HierarchicalRMSAPolicy(nn.Module):
     def act_modulation(self, obs, cache):
 
         path_emb = cache["selected_path_emb"]#.unsqueeze(0)
-        print(f"path_emb = {path_emb.shape} selected_path_emb {path_emb.shape}")
+        # print(f"path_emb = {path_emb.shape} selected_path_emb {path_emb.shape}")
 
         logits, context = self.mod_policy(
             path_emb,
             obs["path_features"],#.unsqueeze(0),
             obs["action_masks"]["mod"]
         )
-        print(f"logits = {logits} ")
+        # print(f"logits = {logits} ")
 
         dist = D.Categorical(logits=logits)
 
@@ -273,8 +273,8 @@ class HierarchicalRMSAPolicy(nn.Module):
             batch_idx,
             path_actions
         ]
-        print(f"selected_path_emb = {selected_path_emb.shape}")
-        print(f"selected_path_features = {obs['path_features'].shape}")
+        # print(f"selected_path_emb = {selected_path_emb.shape}")
+        # print(f"selected_path_features = {obs['path_features'].shape}")
         
         
         # IMPORTANT:

@@ -268,7 +268,7 @@ class ModulationPolicy(nn.Module):
         # ----------------------------------------------------
 
         single_sample = False
-        print(f"juju path_features must be [B,D], got {path_features.shape}")
+        # print(f"juju path_features must be [B,D], got {path_features.shape}")
 
         if path_embedding.dim() == 1:
 

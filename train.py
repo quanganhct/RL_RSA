@@ -61,11 +61,11 @@ print(f"\nUsing device: {DEVICE}\n")
 # ============================================================
 
 # DATA LOADING PARAMS
-LOAD = 200  # Traffic load, measured in Erlangs
+LOAD = 300  # Traffic load, measured in Erlangs
 EPISODES = 100 # Number of episodes per execution
-EPISODE_LENGTH= 300 
+EPISODE_LENGTH= 1000 
 MEAN_SERVICE_HOLDING_TIME = 200
-NUM_SPECTRUM_RESOURCES = 30
+NUM_SPECTRUM_RESOURCES = 380
 
 
 # TRAINING PARAMS
@@ -179,6 +179,10 @@ for iteration in range(NUM_ITERATIONS):
     # --------------------------------------------------------
 
     episode_rewards = []
+    episode_service_blocking_rate = []
+    episode_bit_rate_blocking_rate = []
+    episode_avg_link_utilization = []
+    
 
     for _ in range(EPISODES_PER_ITERATION):
 
@@ -187,6 +191,13 @@ for iteration in range(NUM_ITERATIONS):
         buffer.add_episode(episode)
 
         episode_rewards.append(sum(episode["rewards"]))
+        episode_service_blocking_rate.append(episode["service_blocking_rate"])
+        episode_bit_rate_blocking_rate.append(episode["bit_rate_blocking_rate"])
+        episode_avg_link_utilization.append(episode["avg_link_utilization"])
+        
+        print(f"Reward={sum(episode['rewards']):.4f} | "
+              f"service_blocking_rate = {episode['service_blocking_rate']:.4f} | "
+              f"bit_rate_blocking_rate = {episode['bit_rate_blocking_rate']:.4f} | ")
 
     # --------------------------------------------------------
     # BUILD TRAINING BATCH
@@ -205,6 +216,9 @@ for iteration in range(NUM_ITERATIONS):
     # --------------------------------------------------------
 
     mean_reward = np.mean(episode_rewards)
+    mean_service_blocking_rate = np.mean(episode_service_blocking_rate)
+    mean_bit_rate_blocking_rate = np.mean(episode_bit_rate_blocking_rate)
+    mean_avg_link_utilization = np.mean(episode_avg_link_utilization)
 
     print(
         f"[Iter {iteration:04d}] "
@@ -214,12 +228,15 @@ for iteration in range(NUM_ITERATIONS):
         f"ModEnt={stats['entropy_mod']:.4f} | "
         f"SlotEnt={stats['entropy_slot']:.4f}"
     )
-
+    
+    print(f"service_blocking_rate = {mean_service_blocking_rate:.4f} | "
+          f"bit_rate_blocking_rate = {mean_bit_rate_blocking_rate:.4f} | "
+          f"avg_link_utilization = {mean_avg_link_utilization:.2f}")
     # --------------------------------------------------------
     # OPTIONAL CHECKPOINT
     # --------------------------------------------------------
 
-    if iteration % 100 == 0:
+    if iteration % 1000000 == 0:
 
         checkpoint = {
             "iteration": iteration,

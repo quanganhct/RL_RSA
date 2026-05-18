@@ -238,7 +238,7 @@ class PathTransformer(nn.Module):
         # ====================================================
         # SINGLE-SAMPLE SUPPORT
         # ====================================================
-        print(f'path candidate = {candidate_paths.shape} ')
+        # print(f'path candidate = {candidate_paths.shape} ')
         single_sample = False
 
         if candidate_paths.dim() == 2:
@@ -256,12 +256,12 @@ class PathTransformer(nn.Module):
         # ====================================================
         # SHAPES
         # ====================================================
-        print(f'path candidate 2 = {candidate_paths.shape} ')
+        # print(f'path candidate 2 = {candidate_paths.shape} ')
         B, K, L = candidate_paths.shape
 
         _, E, D_edge = edge_embeddings.shape
 
-        print(f'edge_embeddings = {edge_embeddings.shape} ')
+        # print(f'edge_embeddings = {edge_embeddings.shape} ')
         # ====================================================
         # GATHER EDGE EMBEDDINGS
         # ====================================================

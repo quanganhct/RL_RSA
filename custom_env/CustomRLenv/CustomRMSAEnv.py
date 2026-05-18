@@ -370,7 +370,7 @@ class CustomRMSAEnv(RMSAEnv):
 
         for i in range(len(utils.modulations)):
             mod:Modulation = utils.modulations[i]
-            print(self.current_service)
+            # print(self.current_service)
             if mod.spectral_efficiency > selected_path.best_modulation.spectral_efficiency:
                 continue
 
@@ -412,7 +412,7 @@ class CustomRMSAEnv(RMSAEnv):
         shared_running_services = self.get_running_service_share_links(selected_path)
         #TODO: min gap (SNR - SNRT) for all the service sharing links with @path_idx on a whole spectrum
         min_gap = np.zeros(len(fp))
-        for i in range(len(fp)):
+        for i in range(len(fp) - slots+1):
             if available_slots[i] == 0 or fp[i] == 0:
                 continue
 

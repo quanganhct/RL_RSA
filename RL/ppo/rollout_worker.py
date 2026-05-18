@@ -48,8 +48,12 @@ class RolloutWorker:
 
             "stage_ids": [],   # 🔥 IMPORTANT FIX
 
-            "cache": []
-        }
+            "cache": [],
+            
+            'service_blocking_rate': [],
+            'bit_rate_blocking_rate': [],
+            'avg_link_utilization': [],
+            }
 
         done = False
         
@@ -59,15 +63,15 @@ class RolloutWorker:
             # =====================================================
             # STAGE 0: PATH SELECTION
             # =====================================================
-            print(f"edge_features shape = {obs['edge_features'].shape}")
-            print(f"edge_index shape = {obs['edge_index'].shape}")
-            print(f"candidate_paths shape = {obs['candidate_paths'].shape}")
+            # print(f"edge_features shape = {obs['edge_features'].shape}")
+            # print(f"edge_index shape = {obs['edge_index'].shape}")
+            # print(f"candidate_paths shape = {obs['candidate_paths'].shape}")
 
             path_action, path_logprob, cache = self.policy.act_path(obs)
-            print(f"path_action  = {path_action}")
+            # print(f"path_action  = {path_action}")
 
             obs, _ = self.env.step_path(obs, path_action)
-            print(f"path_features shape = {obs['path_features'].shape}")
+            # print(f"path_features shape = {obs['path_features'].shape}")
  
 
             trajectory["stage_ids"].append(0)
@@ -96,8 +100,8 @@ class RolloutWorker:
                 cache
             )
             
-            print(f'action path mode slot =  {path_action}, {mod_action}, {slot_action}')
-            obs, reward, done, _ = self.env.step(slot_action)
+            # print(f'action path mode slot =  {path_action}, {mod_action}, {slot_action}')
+            obs, reward, done, info = self.env.step(slot_action)
 
             trajectory["stage_ids"].append(2)
 
@@ -119,7 +123,13 @@ class RolloutWorker:
             trajectory["dones"].append(done)
 
             trajectory["cache"].append(cache)
+            
+        trajectory["service_blocking_rate"].append(info["service_blocking_rate"])
+        trajectory["bit_rate_blocking_rate"].append(info["bit_rate_blocking_rate"])
+        trajectory["avg_link_utilization"].append(info["avg_link_utilization"])
+            
 
+        
         return trajectory
 
     # ============================================================
