@@ -204,6 +204,7 @@ def compute_min_gap_osnr(env: RMSAEnv, new_service: Service, path: Path, modulat
     nbslots = compute_number_of_slots(new_service.bit_rate, modulation)
     if not env.is_path_free(path, initial_slot, nbslots):
         print("Initial slot %s, nb slot %s, spectrum %s"%(initial_slot, nbslots, env.num_spectrum_resources))
+        print(env.get_available_slots(path))
         raise Exception("Not enough slot resource")
     
 

@@ -29,7 +29,7 @@ class RolloutWorker:
 
     def collect_episode(self):
 
-        obs = self.env.reset()
+        obs = self.env.customreset(False)
 
         trajectory = {
 
@@ -66,7 +66,7 @@ class RolloutWorker:
             path_action, path_logprob, cache = self.policy.act_path(obs)
             print(f"path_action  = {path_action}")
 
-            obs, _ = self.env.step_path(path_action)
+            obs, _ = self.env.step_path(obs, path_action)
             print(f"path_features shape = {obs['path_features'].shape}")
  
 
@@ -83,7 +83,7 @@ class RolloutWorker:
 
             cache["selected_mod_emb"] = mod_emb
 
-            obs, _ = self.env.step_modulation(mod_action)
+            obs, _ = self.env.step_modulation(obs, mod_action)
 
             trajectory["stage_ids"].append(1)
 
@@ -95,8 +95,9 @@ class RolloutWorker:
                 obs,
                 cache
             )
-
-            obs, reward, done, _ = self.env.step_slot(slot_action)
+            
+            print(f'action path mode slot =  {path_action}, {mod_action}, {slot_action}')
+            obs, reward, done, _ = self.env.step(slot_action)
 
             trajectory["stage_ids"].append(2)
 
