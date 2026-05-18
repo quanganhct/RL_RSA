@@ -95,7 +95,7 @@ def batch_observations(obs_list):
     # --------------------------------------------------------
 
     slot_features = torch.stack([
-        to_tensor(obs["slot_features"])
+        to_tensor(obs["mod_features"])
         for obs in obs_list
     ], dim=0)
 
@@ -130,7 +130,7 @@ def batch_observations(obs_list):
         "candidate_paths": candidate_paths,
         "path_features": path_features,
 
-        "slot_features": slot_features,
+        "mod_features": slot_features,
 
         "action_masks": {
             "path": path_mask,

@@ -411,11 +411,7 @@ class CustomRMSAEnv(RMSAEnv):
         shared_running_services = self.get_running_service_share_links(selected_path)
         #TODO: min gap (SNR - SNRT) for all the service sharing links with @path_idx on a whole spectrum
         min_gap = np.zeros(len(fp))
-<<<<<<< HEAD
         for i in range(len(fp) - slots+1):
-=======
-        for i in range(len(fp)-slots+1):
->>>>>>> 148b09792d203d93dec1b711acf5a87284b18ac9
             if available_slots[i] == 0 or fp[i] == 0:
                 continue
 

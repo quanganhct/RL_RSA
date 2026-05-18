@@ -61,16 +61,16 @@ print(f"\nUsing device: {DEVICE}\n")
 # ============================================================
 
 # DATA LOADING PARAMS
-LOAD = 300  # Traffic load, measured in Erlangs
-EPISODES = 100 # Number of episodes per execution
-EPISODE_LENGTH= 1000 
+LOAD = 30#300  # Traffic load, measured in Erlangs
+EPISODES = 4#100 # Number of episodes per execution
+EPISODE_LENGTH= 10#00 
 MEAN_SERVICE_HOLDING_TIME = 200
 NUM_SPECTRUM_RESOURCES = 380
 
 
 # TRAINING PARAMS
 NUM_ITERATIONS = 1000
-EPISODES_PER_ITERATION = 8
+EPISODES_PER_ITERATION = 1
 LR = 3e-4
 CLIP_EPS = 0.2
 VALUE_COEF = 0.5
@@ -195,9 +195,9 @@ for iteration in range(NUM_ITERATIONS):
         episode_bit_rate_blocking_rate.append(episode["bit_rate_blocking_rate"])
         episode_avg_link_utilization.append(episode["avg_link_utilization"])
         
-        print(f"Reward={sum(episode['rewards']):.4f} | "
-              f"service_blocking_rate = {episode['service_blocking_rate']:.4f} | "
-              f"bit_rate_blocking_rate = {episode['bit_rate_blocking_rate']:.4f} | ")
+        # print(f"Reward={sum(episode['rewards']):.4f} | "
+        #       f"service_blocking_rate = {episode['service_blocking_rate']:.4f} | "
+        #       f"bit_rate_blocking_rate = {episode['bit_rate_blocking_rate']:.4f} | ")
 
     # --------------------------------------------------------
     # BUILD TRAINING BATCH
