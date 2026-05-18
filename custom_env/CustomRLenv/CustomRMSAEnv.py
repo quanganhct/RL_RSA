@@ -398,9 +398,8 @@ class CustomRMSAEnv(RMSAEnv):
             return np.zeros([self.num_spectrum_resources, num_feature])
         
         available_slots = super().get_available_slots(
-                self.k_shortest_paths[
-                    self.current_service.source, self.current_service.destination
-                ][path_idx])
+                self.k_shortest_paths[self.current_service.source, self.current_service.destination]\
+                    [path_idx])
         
         selected_path:Path = self.k_shortest_paths[
                         self.current_service.source, self.current_service.destination
@@ -412,7 +411,11 @@ class CustomRMSAEnv(RMSAEnv):
         shared_running_services = self.get_running_service_share_links(selected_path)
         #TODO: min gap (SNR - SNRT) for all the service sharing links with @path_idx on a whole spectrum
         min_gap = np.zeros(len(fp))
+<<<<<<< HEAD
         for i in range(len(fp) - slots+1):
+=======
+        for i in range(len(fp)-slots+1):
+>>>>>>> 148b09792d203d93dec1b711acf5a87284b18ac9
             if available_slots[i] == 0 or fp[i] == 0:
                 continue
 
@@ -695,6 +698,8 @@ class CustomRMSAEnv(RMSAEnv):
 
         # Keep demand embedding and impairment
         # next_state["demand_embedding"] = self.compute_demand_embedding()
+
+        # self.get_feature_for_new_service(self.current_service)
         
         # if "path" in info:
         #     path_idx = info["path"]
@@ -713,6 +718,20 @@ class CustomRMSAEnv(RMSAEnv):
         
         return next_state, reward, done, info
         
+    def get_feature_for_new_service(self, service:Service):
+        src, dest = service.source, service.destination
+        num_path = len(self.k_shortest_paths[src, dest])
+
+        for i in range(num_path):
+            # print("I", i)
+            path:Path = self.k_shortest_paths[src, dest][i]
+            self.get_path_features(i)
+
+            for j in range(len(utils.modulations)):
+                m:Modulation = utils.modulations[j]
+                if m.spectral_efficiency <= path.best_modulation.spectral_efficiency:
+                    self.get_modulation_features(i, j)
+
     def get_available_blocks(self, path, modulation=None):
         # get available slots across the whole path
         # 1 if slot is available across all the links
@@ -738,17 +757,20 @@ class CustomRMSAEnv(RMSAEnv):
         # getting the blocks
         initial_indices, values, lengths = RMSAEnv.rle(available_slots)
 
-        # selecting the indices where the block is available, i.e., equals to one
-        available_indices = np.where(values == 1)
+        result_index, result_len = [], []
+        for i in range(len(initial_indices)):
+            if values[i] == 0 or lengths[i] < slots:
+                continue
 
-        # selecting the indices where the block has sufficient slots
-        sufficient_indices = np.where(lengths >= slots)
+            _slot = initial_indices[i]
+            _len = lengths[i]
+            while _len >= slots:
+                result_index.append(_slot)
+                result_len.append(_len)
+                _slot += 1
+                _len -= 1
 
-        # getting the intersection, i.e., indices where the slots are available in sufficient quantity
-        # and using only the J first indices
-        final_indices = np.intersect1d(available_indices, sufficient_indices)
-
-        return initial_indices[final_indices], lengths[final_indices]
+        return result_index, result_len
     
     # -----------------------------
     # Get the scores for initial slot
