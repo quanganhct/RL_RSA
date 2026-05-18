@@ -50,7 +50,6 @@ def eval_osnr(env: RMSAEnv, current_service: Service):
                 (current_service.bandwidth) ** 2 / \
                 (4 * attenuation_normalized)
             )
-        
         for service in env.topology[src][dst]["running_services"]:
             if service.service_id != current_service.service_id:
                 d_frequency = abs(service.center_frequency - current_service.center_frequency)
@@ -60,7 +59,6 @@ def eval_osnr(env: RMSAEnv, current_service: Service):
                 #     (phi_modulation_format[service.path.current_modulation.spectral_efficiency - 1] * \
                 #         (service.bandwidth / abs(service.center_frequency - current_service.center_frequency)) * \
                 #         5 / 3 * (l_eff / (constant.fiber_span * 1e3)))
-                
                 sum_phi += phi
 
         power_nli_span = nb_span * (current_service.launch_power / (current_service.bandwidth)) ** 3 * \
@@ -68,11 +66,12 @@ def eval_osnr(env: RMSAEnv, current_service: Service):
         power_ase = nb_span * current_service.bandwidth * h_plank * current_service.center_frequency * \
             (exp(2 * attenuation_normalized * constant.fiber_span * 1e3) - 1) * noise_figure_normalized
 
-        print(current_service.launch_power, power_ase)
+        # print(current_service.launch_power, power_ase)
         acc_gsnr = acc_gsnr + 1 / (current_service.launch_power / (power_ase + power_nli_span))
         acc_ase = acc_ase + 1 / (current_service.launch_power / power_ase)
         acc_nli = acc_nli + 1 / (current_service.launch_power / power_nli_span)
 
+    print("G ASE, NLI:", acc_ase, acc_nli)
     gsnr = 10 * np.log10(1 / acc_gsnr)
     ase = 10 * np.log10(1 / acc_ase)
     nli = 10 * np.log10(1 / acc_nli)
