@@ -120,7 +120,7 @@ class Logger:
 
     def _print_summary(self, metrics):
 
-        loss = self._get(metrics, "total loss")
+        loss = self._get(metrics, "total_loss")
         policy = self._get(metrics, "policy_loss")
         value = self._get(metrics, "value_loss")
         entropy = self._get(metrics, "entropy")

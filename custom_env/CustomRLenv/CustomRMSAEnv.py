@@ -53,6 +53,7 @@ class CustomRMSAEnv(RMSAEnv):
         self.edge_index =  [tuple(map(int, t)) for t in self.topology.edges()]
         
         self.edge_id = {e:i for i, e in enumerate(self.edge_index)}
+        self.all_action_masked = False
         
        
 
@@ -419,8 +420,10 @@ class CustomRMSAEnv(RMSAEnv):
                                              modulation, i, shared_running_services)
             min_gap[i] = mgap
         
+        fp = np.array(fp) + 1e-9
+        min_gap = min_gap + 1e-9
         mod_vec = np.array([fp, min_gap]).T
-        return mod_vec
+        return mod_vec, min_gap
 
     def get_running_service_share_links(self, path:Path) -> List[int]:
         _result = set()
@@ -496,6 +499,14 @@ class CustomRMSAEnv(RMSAEnv):
         return abp / len(self.topology.edges)
 
     def reward(self):
+
+        if self.all_action_masked:
+            self.all_action_masked = False
+            return -1
+        
+        if not self.current_service.accepted:
+            return -1
+
         alpha = 0.4
         beta = 0.3
         gamma = 0.3
@@ -1007,11 +1018,28 @@ class CustomRMSAEnv(RMSAEnv):
             if self.selected_mod_id is None:
                 obs["mod_features"] = None
             else:
-                mod_features =  self.get_modulation_features(self.selected_path_id,
+                mod_features, min_gap =  self.get_modulation_features(self.selected_path_id,
                     self.selected_mod_id
                 )
                 obs["mod_features"]  = torch.tensor(mod_features, 
                                          dtype=torch.float32).unsqueeze(0)
+                
+                if obs["mod_features"].sum() == 0:
+                    self.all_action_masked = True
+
+                    print("ENV Mod Features", mod_features)
+                    
+                    avail_slots = self.get_available_slots(
+                                self.k_shortest_paths[
+                                    self.current_service.source, self.current_service.destination
+                                ][self.selected_path_id])
+                    print("AVAILABLE SLOTS", avail_slots)
+                    slots = self.get_number_slots_given_modulation(utils.modulations[self.selected_mod_id])
+                    fp = spectrum_feature_points(avail_slots, slots)
+                    print("NUMBER OF SLOTS", slots)
+                    print("FEATURE POINTS", fp)
+                    print("MIN GAP", min_gap)
+
                 slot_mask = self.get_slot_mask(self.selected_path_id,
                     self.selected_mod_id)
                 slot_mask = torch.tensor(slot_mask, dtype=torch.bool).unsqueeze(0)

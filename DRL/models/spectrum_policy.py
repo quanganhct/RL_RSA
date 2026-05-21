@@ -355,7 +355,10 @@ class SpectrumPolicy(nn.Module):
         if slot_mask is not None:
 
             transformer_mask = ~slot_mask.bool()
-
+            mask = slot_mask.bool()
+            valid = mask.sum(dim=-1) > 0
+            if not torch.all(valid):
+                transformer_mask = None
         else:
 
             transformer_mask = None
@@ -407,6 +410,43 @@ class SpectrumPolicy(nn.Module):
         # print(f"mask = {slot_mask}")
         print(f"logits = {logits}")
         if not torch.all(valid):
+            print("GLOBAL EXPAND", global_expand)
+            print("X", x)
+            print("SCORE INPUT", score_input)
+            print("SLOT FEATURES", slot_features)
+            print("PATH EMB", path_embedding)
+            print("MODE EMB", mod_embedding)
+
+            _slots = self.slot_encoder(
+                        slot_features
+                    )
+            print("SLOTS 1", _slots)
+            _slots = _slots + self.pos_embedding[:, :S]
+            print("SLOTS 2", _slots)
+
+            _context = torch.cat(
+                [path_embedding, mod_embedding],
+                dim=-1
+            )
+
+            _context = self.context_encoder(
+                _context
+            )
+            print("CONTEXT", _context)
+            # [B,H]
+
+            # ----------------------------------------------------
+            # CONDITION SLOT TOKENS
+            # ----------------------------------------------------
+
+            _context_expand = _context.unsqueeze(1).expand(
+                B,
+                S,
+                self.hidden_dim
+            )
+            print("CONTEXT EXPAND", _context_expand)
+
+
             print("Warning all slots actions masked")
             print(f"mask = {slot_mask}")
             slot_mask = None #[~valid, 0] = 1

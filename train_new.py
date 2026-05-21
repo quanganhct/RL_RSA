@@ -34,6 +34,7 @@ random.seed(SEED)
 # ============================================================
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = 'cpu'
 print(f"\nUsing device: {DEVICE}\n")
 
 
@@ -175,12 +176,16 @@ for iteration in range(NUM_ITERATIONS):
     
    
     print(f"[Iter {iteration:04d}] Reward = {mean_reward:.4f}")
-
+    print("LOSS:", stats['loss_total'])
+    print("VALUE LOSS", stats['value_loss'])
+    print("PATH ENTROPY", stats['entropy_path'])
+    print("MODULATION ENTROPY", stats['entropy_mod'])
+    print("SLOT ENTROPY", stats['entropy_slot'])
     # print(
     #     f"[Iter {iteration:04d}] "
     #     f"Reward={mean_reward:.4f} | "
-    #     f"Loss={stats['loss_total']:.4f} | "
-    #     f"Value={stats['value']:0.4f} /"
+    #     # f"Loss={stats['loss_total']:.4f} | "
+    #     f"Value={stats['value_loss']:0.4f} /"
     #     f"PathEnt={stats['entropy_path']:.4f} | "
     #     f"ModEnt={stats['entropy_mod']:.4f} | "
     #     f"SlotEnt={stats['entropy_slot']:.4f}"
