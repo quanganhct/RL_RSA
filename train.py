@@ -61,15 +61,15 @@ print(f"\nUsing device: {DEVICE}\n")
 # ============================================================
 
 # DATA LOADING PARAMS
-LOAD = 30#300  # Traffic load, measured in Erlangs
+LOAD = 300#300  # Traffic load, measured in Erlangs
 EPISODES = 4#100 # Number of episodes per execution
-EPISODE_LENGTH= 10#00 
+EPISODE_LENGTH= 1000 
 MEAN_SERVICE_HOLDING_TIME = 200
 NUM_SPECTRUM_RESOURCES = 380
 
 
 # TRAINING PARAMS
-NUM_ITERATIONS = 1000
+NUM_ITERATIONS = 100
 EPISODES_PER_ITERATION = 1
 LR = 3e-4
 CLIP_EPS = 0.2

@@ -531,7 +531,9 @@ class CustomRMSAEnv(RMSAEnv):
     # Custom step to update features
     # -----------------------------
     def step(self, selected_slot):
-        self.selected_slot_id = selected_slot
+        self.selected_slot_id = int(selected_slot)
+        
+        print(f'path = {self.selected_path_id} mod = {self.selected_mod_id} slot = {self.selected_slot_id}')
 
         self.generated_req_lifetime.append((self.current_service.arrival_time, self.current_service.holding_time))
 
@@ -972,21 +974,21 @@ class CustomRMSAEnv(RMSAEnv):
         # GRAPH STATE
         edge_features = self.get_edge_features()
         obs["edge_features"] =  torch.tensor(edge_features, 
-                                         dtype=torch.float32)
+                                         dtype=torch.float32).unsqueeze(0)
         # the library can be updated so that nodes are directly from 0
         # edge_index = self.edge_index
         obs["edge_index"] = torch.tensor(self.edge_index, dtype=torch.long).T - 1  # [2, num_edges]
         
-     
+        obs["edge_index"] = obs["edge_index"].unsqueeze(0)
         # PATH CANDIDATES [should be list of list as size might differ]
         candidate_paths, candidate_paths_features =  self.get_candidate_paths()
         
-        obs["candidate_paths"] = torch.tensor(candidate_paths, dtype=torch.long)
+        obs["candidate_paths"] = torch.tensor(candidate_paths, dtype=torch.long).unsqueeze(0)
         obs["candidate_paths_features"] = torch.tensor(candidate_paths_features, 
-                                         dtype=torch.float32)
+                                         dtype=torch.float32).unsqueeze(0)
         
         path_mask = self.get_paths_mask()  
-        path_mask = torch.tensor(path_mask, dtype=torch.bool)  
+        path_mask = torch.tensor(path_mask, dtype=torch.bool).unsqueeze(0)  
         # PATH FEATURES  
         if self.selected_path_id is None:
             obs["path_features"] = None
@@ -997,9 +999,9 @@ class CustomRMSAEnv(RMSAEnv):
                 self.selected_path_id)
              
             obs["path_features"]  =  torch.tensor(path_features, 
-                                         dtype=torch.float32)
+                                         dtype=torch.float32).unsqueeze(0)
             mod_mask = self.get_mods_mask(self.selected_path_id)
-            mod_mask = torch.tensor(mod_mask, dtype=torch.bool)
+            mod_mask = torch.tensor(mod_mask, dtype=torch.bool).unsqueeze(0)
             
             # Modulation FEATURES 
             if self.selected_mod_id is None:
@@ -1009,10 +1011,10 @@ class CustomRMSAEnv(RMSAEnv):
                     self.selected_mod_id
                 )
                 obs["mod_features"]  = torch.tensor(mod_features, 
-                                         dtype=torch.float32)
+                                         dtype=torch.float32).unsqueeze(0)
                 slot_mask = self.get_slot_mask(self.selected_path_id,
                     self.selected_mod_id)
-                slot_mask = torch.tensor(slot_mask, dtype=torch.bool)
+                slot_mask = torch.tensor(slot_mask, dtype=torch.bool).unsqueeze(0)
             
      
         # MASKS
