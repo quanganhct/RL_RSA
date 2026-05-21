@@ -683,6 +683,10 @@ class CustomRMSAEnv(RMSAEnv):
         # print(f'reward = {reward}')
       
         next_state = self._obs(next_state)
+
+        self.selected_path_id = None
+        self.selected_mod_id = None
+        self.selected_slot_id =  None
         
         # next_state["node_features"] = self.get_node_features()
         # next_state["edge_features"] = self.get_edge_features()
