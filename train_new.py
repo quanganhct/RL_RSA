@@ -17,6 +17,7 @@ from DRL.ppo.trainer import PPOTrainer
 from DRL.utils.logging import Logger
 
 import tqdm
+import datetime
 
 # ============================================================
 # REPRODUCIBILITY
@@ -122,9 +123,14 @@ worker = RolloutWorker(
 buffer = HierarchicalRolloutBuffer(rollout_size=ROLLOUT_SIZE, 
                                    mini_batch_size=MINI_BATCH_SIZE)
 
+now = datetime.datetime.now()
+log_filename = now.strftime("%Y-%m-%d_%H-%M-%S")+".txt"
+logger = Logger()
+logger.set_log_file(log_filename, 'log')
+
 trainer = PPOTrainer(
     policy=policy,
-    logger=Logger(),
+    logger=logger,
     lr=LR,
     mini_batch_size=MINI_BATCH_SIZE,
     clip_eps=CLIP_EPS,
@@ -177,12 +183,8 @@ for iteration in range(NUM_ITERATIONS):
     mean_reward = float(batch["rewards"].mean().item())
     
    
-    print(f"[Iter {iteration:04d}] Reward = {mean_reward:.4f}")
-    print("LOSS:", stats['loss_total'])
-    print("VALUE LOSS", stats['value_loss'])
-    print("PATH ENTROPY", stats['entropy_path'])
-    print("MODULATION ENTROPY", stats['entropy_mod'])
-    print("SLOT ENTROPY", stats['entropy_slot'])
+    logger.log_str(f"[Iter {iteration:04d}] Reward = {mean_reward:.4f}")
+    logger.log_dict(stats)
     # print(
     #     f"[Iter {iteration:04d}] "
     #     f"Reward={mean_reward:.4f} | "
@@ -217,5 +219,5 @@ for iteration in range(NUM_ITERATIONS):
 
     #     print(f"Checkpoint saved at iteration {iteration}")
 
-
+logger.logger_close()
 print("\nTraining complete.\n")

@@ -16,6 +16,7 @@ Key upgrades:
 
 import os
 import numpy as np
+import logging
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -55,6 +56,30 @@ class Logger:
             self.writer = None
             print("[LOGGER] TensorBoard disabled")
 
+        self.logger = logging.getLogger(name='main')
+
+    def set_log_file(self, filename, folder_name):
+        logging.basicConfig(
+                    level=logging.NOTSET,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    filemode='w', force=True
+                )
+
+        format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        file_handler = logging.FileHandler('%s/%s'%(folder_name, filename), 'w')
+        file_handler.setFormatter(format)
+
+        for handler in self.logger.handlers[:]:
+            self.logger.removeHandler(handler)
+        self.logger.addHandler(file_handler)
+
+    def logger_close(self):
+        handlers = self.logger.handlers[:]
+        for handler in handlers:
+            self.logger.removeHandler(handler)
+            handler.close()
+
+
     # ========================================================
     # MAIN ENTRY
     # ========================================================
@@ -66,6 +91,8 @@ class Logger:
             self._log_scalar(k, v)
 
         self._print_summary(metrics)
+        self.logger.info(f"[STEP {step}]")
+        self.log_dict(metrics)
 
     # ========================================================
     # SAFE SCALAR LOGGING
@@ -119,22 +146,28 @@ class Logger:
         return default if v is None else v
 
     def _print_summary(self, metrics):
+        s = f"[STEP {self.step}] "
+        for k, v in metrics.items():
+            value = self._to_scalar(v)
+            s += f" | {k}={value:.4f}"
+        print(s)
 
-        loss = self._get(metrics, "total_loss")
-        policy = self._get(metrics, "policy_loss")
-        value = self._get(metrics, "value_loss")
-        entropy = self._get(metrics, "entropy")
-        ratio = self._get(metrics, "ratio", 1.0)
-
-        print(
-            f"[STEP {self.step}] "
-            f"loss={loss:.4f} | "
-            f"policy={policy:.4f} | "
-            f"value={value:.4f} | "
-            f"entropy={entropy:.4f} | "
-            f"ratio={ratio:.3f}"
-        )
-
+    def log_dict(self, metrics: dict):
+        s = ""
+        first = True
+        for k, v in metrics.items():
+            value = self._to_scalar(v)
+            if first:
+                s += f"{k}={value:.4f}"
+                first = False
+            else:
+                s += f" | {k}={value:.4f}"
+        print(s)
+        self.logger.info(s)
+    
+    def log_str(self, s:str):
+        print(s)
+        self.logger.info(s)
 
     # ========================================================
     # RMSA METRICS
