@@ -17,6 +17,7 @@ from DRL.ppo.trainer import PPOTrainer
 from DRL.utils.logging import Logger
 
 import tqdm
+import datetime
 
 # ============================================================
 # REPRODUCIBILITY
@@ -122,9 +123,14 @@ worker = RolloutWorker(
 buffer = HierarchicalRolloutBuffer(rollout_size=ROLLOUT_SIZE, 
                                    mini_batch_size=MINI_BATCH_SIZE)
 
+now = datetime.datetime.now()
+log_filename = now.strftime("%Y-%m-%d_%H-%M-%S")+".txt"
+logger = Logger()
+logger.set_log_file(log_filename, 'log')
+
 trainer = PPOTrainer(
     policy=policy,
-    logger=Logger(),
+    logger=logger,
     lr=LR,
     mini_batch_size=MINI_BATCH_SIZE,
     clip_eps=CLIP_EPS,
@@ -177,12 +183,17 @@ for iteration in range(NUM_ITERATIONS):
     mean_reward = float(batch["rewards"].mean().item())
     
    
+
     print(f"[Iter {iteration:04d}] Reward = {mean_reward:.4f} service_blocking_rate = {np.mean(rollout_info['service_blocking_rate']):.4f} |bit_rate_blocking_rate = {np.mean(rollout_info['bit_rate_blocking_rate']):.4f} | avg_link_utilization = {np.mean(rollout_info['avg_link_utilization']):.2f}")
     print("LOSS:", np.mean(stats['loss_total']))
     print("VALUE LOSS", np.mean(stats['value_loss']))
     print("PATH ENTROPY", np.mean(stats['entropy_path']))
     print("MODULATION ENTROPY", np.mean(stats['entropy_mod']))
     print("SLOT ENTROPY", np.mean(stats['entropy_slot']))
+
+    logger.log_str(f"[Iter {iteration:04d}] Reward = {mean_reward:.4f}")
+    logger.log_dict(stats)
+
     # print(
     #     f"[Iter {iteration:04d}] "
     #     f"Reward={mean_reward:.4f} | "
@@ -217,5 +228,5 @@ for iteration in range(NUM_ITERATIONS):
 
     #     print(f"Checkpoint saved at iteration {iteration}")
 
-
+logger.logger_close()
 print("\nTraining complete.\n")

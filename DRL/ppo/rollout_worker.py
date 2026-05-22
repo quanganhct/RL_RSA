@@ -187,7 +187,7 @@ class RolloutWorker:
         with torch.no_grad():
 
             last_value = self.policy.evaluate_value(
-                self.obs
+                obs #self.obs
             )
 
         return last_value, rollout_info
