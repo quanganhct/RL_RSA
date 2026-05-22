@@ -47,8 +47,9 @@ EPISODE_LENGTH = 1000
 MEAN_SERVICE_HOLDING_TIME = 200
 NUM_SPECTRUM_RESOURCES = 380
 
-NUM_ITERATIONS = 1000
-ROLLOUT_SIZE = 128#4096
+NUM_ITERATIONS = 100
+ROLLOUT_SIZE = 1000#4096
+MINI_BATCH_SIZE = 32
 
 LR = 3e-4
 CLIP_EPS = 0.2
@@ -119,12 +120,13 @@ worker = RolloutWorker(
 )
 
 buffer = HierarchicalRolloutBuffer(rollout_size=ROLLOUT_SIZE, 
-                                   mini_batch_size=32)
+                                   mini_batch_size=MINI_BATCH_SIZE)
 
 trainer = PPOTrainer(
     policy=policy,
     logger=Logger(),
     lr=LR,
+    mini_batch_size=MINI_BATCH_SIZE
     clip_eps=CLIP_EPS,
     value_coef=VALUE_COEF,
     entropy_coef=ENTROPY_COEF,
