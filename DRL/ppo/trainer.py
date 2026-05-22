@@ -130,27 +130,27 @@ class PPOTrainer:
     # ============================================================
 
 
-    def _to_device(self, batch):
-        for k in batch:
-            if torch.is_tensor(batch[k]):
-                batch[k] = batch[k].to(self.device)
-                
     # def _to_device(self, batch):
+    #     for k in batch:
+    #         if torch.is_tensor(batch[k]):
+    #             batch[k] = batch[k].to(self.device)
+                
+    def _to_device(self, batch):
 
-    #     def move(x):
+        def move(x):
 
-    #         if torch.is_tensor(x):
-    #             return x.to(self.device)
+            if torch.is_tensor(x):
+                return x.to(self.device)
 
-    #         if isinstance(x, dict):
-    #             return {k: move(v) for k, v in x.items()}
+            if isinstance(x, dict):
+                return {k: move(v) for k, v in x.items()}
 
-    #         if isinstance(x, list):
-    #             return [move(v) for v in x]
+            if isinstance(x, list):
+                return [move(v) for v in x]
 
-    #         return x
+            return x
 
-    #     return move(batch)
+        return move(batch)
 
     # ============================================================
     # MINIBATCH INDEXING
