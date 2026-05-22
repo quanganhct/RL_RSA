@@ -59,6 +59,9 @@ class Logger:
         self.logger = logging.getLogger(name='main')
 
     def set_log_file(self, filename, folder_name):
+        if not os.path.exists(folder_name):
+            os.makedirs(folder_name)
+
         logging.basicConfig(
                     level=logging.NOTSET,
                     format='%(asctime)s - %(levelname)s - %(message)s',
