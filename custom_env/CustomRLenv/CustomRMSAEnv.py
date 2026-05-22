@@ -544,7 +544,7 @@ class CustomRMSAEnv(RMSAEnv):
     def step(self, selected_slot):
         self.selected_slot_id = int(selected_slot)
         
-        print(f'path = {self.selected_path_id} mod = {self.selected_mod_id} slot = {self.selected_slot_id}')
+        # print(f'path = {self.selected_path_id} mod = {self.selected_mod_id} slot = {self.selected_slot_id}')
 
         self.generated_req_lifetime.append((self.current_service.arrival_time, self.current_service.holding_time))
 
@@ -1031,18 +1031,18 @@ class CustomRMSAEnv(RMSAEnv):
                 if obs["mod_features"].sum() == 0:
                     self.all_action_masked = True
 
-                    print("ENV Mod Features", mod_features)
+                    # print("ENV Mod Features", mod_features)
                     
                     avail_slots = self.get_available_slots(
                                 self.k_shortest_paths[
                                     self.current_service.source, self.current_service.destination
                                 ][self.selected_path_id])
-                    print("AVAILABLE SLOTS", avail_slots)
+                    # print("AVAILABLE SLOTS", avail_slots)
                     slots = self.get_number_slots_given_modulation(utils.modulations[self.selected_mod_id])
                     fp = spectrum_feature_points(avail_slots, slots)
-                    print("NUMBER OF SLOTS", slots)
-                    print("FEATURE POINTS", fp)
-                    print("MIN GAP", min_gap)
+                    # print("NUMBER OF SLOTS", slots)
+                    # print("FEATURE POINTS", fp)
+                    # print("MIN GAP", min_gap)
 
                 slot_mask = self.get_slot_mask(self.selected_path_id,
                     self.selected_mod_id)

@@ -177,12 +177,12 @@ for iteration in range(NUM_ITERATIONS):
     mean_reward = float(batch["rewards"].mean().item())
     
    
-    print(f"[Iter {iteration:04d}] Reward = {mean_reward:.4f}")
-    print("LOSS:", stats['loss_total'])
-    print("VALUE LOSS", stats['value_loss'])
-    print("PATH ENTROPY", stats['entropy_path'])
-    print("MODULATION ENTROPY", stats['entropy_mod'])
-    print("SLOT ENTROPY", stats['entropy_slot'])
+    print(f"[Iter {iteration:04d}] Reward = {mean_reward:.4f} service_blocking_rate = {np.mean(rollout_info['service_blocking_rate']):.4f} |bit_rate_blocking_rate = {np.mean(rollout_info['bit_rate_blocking_rate']):.4f} | avg_link_utilization = {np.mean(rollout_info['avg_link_utilization']):.2f}")
+    print("LOSS:", np.mean(stats['loss_total']))
+    print("VALUE LOSS", np.mean(stats['value_loss']))
+    print("PATH ENTROPY", np.mean(stats['entropy_path']))
+    print("MODULATION ENTROPY", np.mean(stats['entropy_mod']))
+    print("SLOT ENTROPY", np.mean(stats['entropy_slot']))
     # print(
     #     f"[Iter {iteration:04d}] "
     #     f"Reward={mean_reward:.4f} | "
