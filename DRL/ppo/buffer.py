@@ -262,7 +262,7 @@ class HierarchicalRolloutBuffer:
                     dtype=torch.float32
                 ).to(self.device),
                 
-            "last_obs": self.last_obs
+            # "last_obs": self.last_obs
         }
 
         return batch

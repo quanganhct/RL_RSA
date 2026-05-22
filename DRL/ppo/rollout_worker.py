@@ -172,7 +172,7 @@ class RolloutWorker:
             # =====================================================
 
             if done:
-                buffer.last_obs = obs
+                # buffer.last_obs = obs
 
                 self.obs = self.env.customreset(False)
 

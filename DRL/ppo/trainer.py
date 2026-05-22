@@ -166,8 +166,13 @@ class PPOTrainer:
 
                 new_batch[k] = v[idx]
 
+            elif isinstance(v, dict):
+                new_batch[k] = {
+                    kk: vv[idx]
+                    for kk, vv in v.items()
+                }
             else:
-
+                
                 new_batch[k] = v
 
         return new_batch
