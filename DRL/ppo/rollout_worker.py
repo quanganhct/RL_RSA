@@ -63,7 +63,7 @@ class RolloutWorker:
 
         while not buffer.is_full():
 
-            obs = self.obs
+            obs =  self._to_device(self.obs)
 
             # =====================================================
             # STAGE 1: PATH ACTION
@@ -88,7 +88,7 @@ class RolloutWorker:
 
                 mod_action, mod_logprob, mod_emb = (
                     self.policy.act_modulation(
-                        obs_after_path,
+                        self._to_device(obs_after_path),
                         cache['selected_path_emb']
                     )
                 )
@@ -108,7 +108,7 @@ class RolloutWorker:
 
                 slot_action, slot_logprob = (
                     self.policy.act_slot(
-                        obs_after_mod,
+                        self._to_device(obs_after_mod),
                         cache
                     )
                 )
@@ -119,7 +119,7 @@ class RolloutWorker:
 
             with torch.no_grad():
 
-                value = self.policy.evaluate_value(obs)
+                value = self.policy.evaluate_value(self._to_device(obs))
 
             # =====================================================
             # ENV STEP
@@ -187,7 +187,24 @@ class RolloutWorker:
         with torch.no_grad():
 
             last_value = self.policy.evaluate_value(
-                obs #self.obs
+                self._to_device(next_obs) #self.obs
             )
 
         return last_value, rollout_info
+    
+    def _to_device(self, batch):
+
+        def recursive_move(obj):
+
+            if torch.is_tensor(obj):
+                return obj.to(self.device)
+
+            if isinstance(obj, dict):
+                return {k: recursive_move(v) for k, v in obj.items()}
+
+            if isinstance(obj, list):
+                return [recursive_move(v) for v in obj]
+
+            return obj
+
+        return recursive_move(batch)

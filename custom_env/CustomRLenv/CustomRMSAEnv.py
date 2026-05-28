@@ -568,13 +568,13 @@ class CustomRMSAEnv(RMSAEnv):
             if selected_path.current_modulation.spectral_efficiency <= selected_path.best_modulation.spectral_efficiency:
 
                 slots = self.get_number_slots(selected_path)
-                self.logger.debug(
-                    "{} processing action {} path {} mod {} and initial slot {} for {} slots".format(
-                        self.current_service.service_id,
-                        [self.selected_path_id, self.selected_mod_id, self.selected_slot_id],
-                        self.selected_path_id, self.selected_mod_id, self.selected_slot_id, slots
-                    )
-                )
+                # self.logger.debug(
+                #     "{} processing action {} path {} mod {} and initial slot {} for {} slots".format(
+                #         self.current_service.service_id,
+                #         [self.selected_path_id, self.selected_mod_id, self.selected_slot_id],
+                #         self.selected_path_id, self.selected_mod_id, self.selected_slot_id, slots
+                #     )
+                # )
                 if self.is_path_free(
                     selected_path,
                     self.selected_slot_id,

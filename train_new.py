@@ -35,7 +35,7 @@ random.seed(SEED)
 # ============================================================
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-DEVICE = 'cpu'
+# DEVICE = 'cpu'
 print(f"\nUsing device: {DEVICE}\n")
 
 
@@ -43,14 +43,14 @@ print(f"\nUsing device: {DEVICE}\n")
 # CONFIG
 # ============================================================
 
-LOAD = 20
-EPISODE_LENGTH = 50
+LOAD = 20# 300
+EPISODE_LENGTH = 1000
 MEAN_SERVICE_HOLDING_TIME = 200
 NUM_SPECTRUM_RESOURCES = 380
 
-NUM_ITERATIONS = 100
-ROLLOUT_SIZE = 50#4096
-MINI_BATCH_SIZE = 10
+NUM_ITERATIONS = 600
+ROLLOUT_SIZE = 1000#4096
+MINI_BATCH_SIZE = 64
 
 LR = 3e-4
 CLIP_EPS = 0.2
@@ -121,7 +121,8 @@ worker = RolloutWorker(
 )
 
 buffer = HierarchicalRolloutBuffer(rollout_size=ROLLOUT_SIZE, 
-                                   mini_batch_size=MINI_BATCH_SIZE)
+                                   mini_batch_size=MINI_BATCH_SIZE,
+                                   device=DEVICE)
 
 now = datetime.datetime.now()
 log_filename = now.strftime("%Y-%m-%d_%H-%M-%S")+".txt"
@@ -145,6 +146,12 @@ trainer = PPOTrainer(
 # ============================================================
 
 print("Starting training...\n")
+
+all_reward = []
+all_blocking_service = []
+all_blocking_rate = []
+all_avg_link_utils = []
+
 
 for iteration in range(NUM_ITERATIONS):
 
@@ -184,7 +191,7 @@ for iteration in range(NUM_ITERATIONS):
     
    
 
-    print(f"[Iter {iteration:04d}] Reward = {mean_reward:.4f} service_blocking_rate = {np.mean(rollout_info['service_blocking_rate']):.4f} |bit_rate_blocking_rate = {np.mean(rollout_info['bit_rate_blocking_rate']):.4f} | avg_link_utilization = {np.mean(rollout_info['avg_link_utilization']):.2f}")
+    print(f"[Iter {iteration:04d}] Reward = {mean_reward:.4f} service_blocking_rate = {rollout_info['service_blocking_rate'][-1]:.4f} |bit_rate_blocking_rate = {rollout_info['bit_rate_blocking_rate'][-1]:.4f} | avg_link_utilization = {rollout_info['avg_link_utilization'][-1]:.2f}")
     print("LOSS:", np.mean(stats['loss_total']))
     print("VALUE LOSS", np.mean(stats['value_loss']))
     print("PATH ENTROPY", np.mean(stats['entropy_path']))
@@ -193,6 +200,14 @@ for iteration in range(NUM_ITERATIONS):
 
     logger.log_str(f"[Iter {iteration:04d}] Reward = {mean_reward:.4f}")
     logger.log_dict(stats)
+    
+    all_reward.append(mean_reward)
+    all_blocking_service.append(rollout_info['service_blocking_rate'][-1])
+    all_blocking_rate.append(rollout_info['bit_rate_blocking_rate'][-1])
+    all_avg_link_utils.append(rollout_info['avg_link_utilization'][-1])
+
+
+   
 
     # print(
     #     f"[Iter {iteration:04d}] "
@@ -230,3 +245,17 @@ for iteration in range(NUM_ITERATIONS):
 
 logger.logger_close()
 print("\nTraining complete.\n")
+
+
+
+
+
+# # Combine the lists into rows using zip
+# rows = zip(all_reward, all_blocking_service, all_blocking_rate, all_avg_link_utils)
+
+# with open('output.csv', 'w', newline='') as f:
+#     writer = csv.writer(f)
+#     # Optional: write a header row
+#     writer.writerow(['Column1', 'Column2', 'Column3'])
+#     # Write all rows at once
+#     writer.writerows(rows)
