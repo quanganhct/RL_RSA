@@ -156,7 +156,7 @@ all_blocking_service = []
 all_blocking_rate = []
 all_avg_link_utils = []
 
-writer = CSVWriter('result.csv', 'log')
+writer = CSVWriter('resu lt.csv', 'log')
 writer.write(['Reward', 'service_blocking_rate', 'bit_rate_blocking_rate', 'avg_link_utilization'])
 
 for iteration in range(NUM_ITERATIONS):
