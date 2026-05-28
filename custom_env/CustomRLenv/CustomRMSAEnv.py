@@ -1002,6 +1002,9 @@ class CustomRMSAEnv(RMSAEnv):
                                          dtype=torch.float32).unsqueeze(0)
         
         path_mask = self.get_paths_mask()  
+        if sum(path_mask) == 0:
+            self.all_action_masked = True
+
         path_mask = torch.tensor(path_mask, dtype=torch.bool).unsqueeze(0)  
         # PATH FEATURES  
         if self.selected_path_id is None:
@@ -1015,6 +1018,9 @@ class CustomRMSAEnv(RMSAEnv):
             obs["path_features"]  =  torch.tensor(path_features, 
                                          dtype=torch.float32).unsqueeze(0)
             mod_mask = self.get_mods_mask(self.selected_path_id)
+            if sum(mod_mask) == 0:
+                self.all_action_masked = True
+
             mod_mask = torch.tensor(mod_mask, dtype=torch.bool).unsqueeze(0)
             
             # Modulation FEATURES 
@@ -1027,8 +1033,8 @@ class CustomRMSAEnv(RMSAEnv):
                 obs["mod_features"]  = torch.tensor(mod_features, 
                                          dtype=torch.float32).unsqueeze(0)
                 
-                if obs["mod_features"].sum() == 0:
-                    self.all_action_masked = True
+                # if obs["mod_features"].sum() == 0:
+                #     self.all_action_masked = True
 
                     # print("ENV Mod Features", mod_features)
                     
@@ -1045,6 +1051,10 @@ class CustomRMSAEnv(RMSAEnv):
 
                 slot_mask = self.get_slot_mask(self.selected_path_id,
                     self.selected_mod_id)
+                
+                if sum(slot_mask) == 0:
+                    self.all_action_masked = True
+
                 slot_mask = torch.tensor(slot_mask, dtype=torch.bool).unsqueeze(0)
             
      
