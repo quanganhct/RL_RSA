@@ -1,5 +1,7 @@
 import torch
-
+from DRL.utils.logging import Logger
+import datetime
+import time
 
 class RolloutWorker:
     """
@@ -31,12 +33,14 @@ class RolloutWorker:
         self,
         env,
         policy,
+        logger,
         device="cpu"
     ):
 
         self.env = env
         self.policy = policy
         self.device = device
+        self.logger:Logger = logger
 
         # --------------------------------------------------------
         # PERSISTENT ENV STATE
@@ -124,11 +128,11 @@ class RolloutWorker:
             # =====================================================
             # ENV STEP
             # =====================================================
-
+            start = time.time()
             next_obs, reward, done, info = self.env.step(
                 slot_action
             )
-
+            self.logger.log_str("ENV step + next obs: %s seconds"%((time.time()-start)))
             # =====================================================
             # STORE PPO TRANSITION
             # =====================================================

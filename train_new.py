@@ -43,14 +43,14 @@ print(f"\nUsing device: {DEVICE}\n")
 # CONFIG
 # ============================================================
 
-LOAD = 20
-EPISODE_LENGTH = 50
+LOAD = 300
+EPISODE_LENGTH = 1000
 MEAN_SERVICE_HOLDING_TIME = 200
-NUM_SPECTRUM_RESOURCES = 100
+NUM_SPECTRUM_RESOURCES = 300
 
 NUM_ITERATIONS = 100
-ROLLOUT_SIZE = 50#4096
-MINI_BATCH_SIZE = 10
+ROLLOUT_SIZE = EPISODE_LENGTH#4096
+MINI_BATCH_SIZE = 64
 
 LR = 3e-4
 CLIP_EPS = 0.2
@@ -124,6 +124,7 @@ policy = HierarchicalRMSAPolicy(
 worker = RolloutWorker(
     env=env,
     policy=policy,
+    logger=logger,
     device=DEVICE
 )
 
