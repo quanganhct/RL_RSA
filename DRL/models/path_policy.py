@@ -244,6 +244,11 @@ class PathPolicy(nn.Module):
         # ----------------------------------------------------
         # GLOBAL PATH ATTENTION
         # ----------------------------------------------------
+        mask = path_mask.bool()
+        valid = mask.sum(dim=-1) > 0 
+        if not torch.all(valid):
+            print("Warning all path actions masked")
+            path_mask = None #[~valid, 0] = 1
 
         if path_mask is not None:
 
@@ -287,11 +292,11 @@ class PathPolicy(nn.Module):
         # ----------------------------------------------------
         # assert path_mask.any(dim=-1).all, 'All path actions masked!'
         
-        mask = path_mask.bool()
-        valid = mask.sum(dim=-1) > 0 
-        if not torch.all(valid):
-            print("Warning all path actions masked")
-            path_mask = None #[~valid, 0] = 1
+        # mask = path_mask.bool()
+        # valid = mask.sum(dim=-1) > 0 
+        # if not torch.all(valid):
+        #     print("Warning all path actions masked")
+        #     path_mask = None #[~valid, 0] = 1
             
         if path_mask is not None:
 
@@ -304,5 +309,11 @@ class PathPolicy(nn.Module):
         # SINGLE SAMPLE FIX
         # ----------------------------------------------------
 
+        if torch.all(logits.isnan()):
+            print("Path emb", path_embeddings)
+            print("Attn out", attn_out)
+            print("Attn mask", attn_mask)
+            print("X", x)
+            print("Path mask", mask)
 
         return logits

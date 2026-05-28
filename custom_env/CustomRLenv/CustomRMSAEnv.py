@@ -1032,13 +1032,13 @@ class CustomRMSAEnv(RMSAEnv):
 
                     # print("ENV Mod Features", mod_features)
                     
-                    avail_slots = self.get_available_slots(
-                                self.k_shortest_paths[
-                                    self.current_service.source, self.current_service.destination
-                                ][self.selected_path_id])
+                    # avail_slots = self.get_available_slots(
+                    #             self.k_shortest_paths[
+                    #                 self.current_service.source, self.current_service.destination
+                    #             ][self.selected_path_id])
                     # print("AVAILABLE SLOTS", avail_slots)
-                    slots = self.get_number_slots_given_modulation(utils.modulations[self.selected_mod_id])
-                    fp = spectrum_feature_points(avail_slots, slots)
+                    # slots = self.get_number_slots_given_modulation(utils.modulations[self.selected_mod_id])
+                    # fp = spectrum_feature_points(avail_slots, slots)
                     # print("NUMBER OF SLOTS", slots)
                     # print("FEATURE POINTS", fp)
                     # print("MIN GAP", min_gap)

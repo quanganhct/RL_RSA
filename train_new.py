@@ -45,7 +45,7 @@ print(f"\nUsing device: {DEVICE}\n")
 # ============================================================
 
 LOAD = 300
-EPISODE_LENGTH = 1000
+EPISODE_LENGTH = 300
 MEAN_SERVICE_HOLDING_TIME = 200
 NUM_SPECTRUM_RESOURCES = 300
 
@@ -156,7 +156,9 @@ all_blocking_service = []
 all_blocking_rate = []
 all_avg_link_utils = []
 
-writer = CSVWriter('resu lt.csv', 'log')
+
+writer = CSVWriter('result_%s.csv'%(now.strftime("%Y-%m-%d_%H-%M-%S")), 'log')
+
 writer.write(['Reward', 'service_blocking_rate', 'bit_rate_blocking_rate', 'avg_link_utilization'])
 
 for iteration in range(NUM_ITERATIONS):
