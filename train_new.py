@@ -43,13 +43,13 @@ print(f"\nUsing device: {DEVICE}\n")
 # CONFIG
 # ============================================================
 
-LOAD = 20# 300
+LOAD = 300
 EPISODE_LENGTH = 1000
 MEAN_SERVICE_HOLDING_TIME = 200
-NUM_SPECTRUM_RESOURCES = 380
+NUM_SPECTRUM_RESOURCES = 300
 
 NUM_ITERATIONS = 600
-ROLLOUT_SIZE = 1000#4096
+ROLLOUT_SIZE = EPISODE_LENGTH#4096
 MINI_BATCH_SIZE = 64
 
 LR = 3e-4
@@ -73,6 +73,13 @@ topology = get_topology(
     alpha=1
 )
 
+now = datetime.datetime.now()
+log_filename = now.strftime("%Y-%m-%d_%H-%M-%S")+".txt"
+debug_filename = now.strftime("DEBUG_%Y-%m-%d_%H-%M-%S")+".txt"
+logger = Logger()
+logger.set_log_file(log_filename, debug_filename, 'log')
+
+
 env_args = dict(
     topology=topology,
     seed=SEED,
@@ -86,7 +93,7 @@ env_args = dict(
 )
 
 env = CustomRMSAEnv(**env_args)
-
+env.logger=logger
 
 # ============================================================
 # MODEL
@@ -117,17 +124,13 @@ policy = HierarchicalRMSAPolicy(
 worker = RolloutWorker(
     env=env,
     policy=policy,
+    logger=logger,
     device=DEVICE
 )
 
 buffer = HierarchicalRolloutBuffer(rollout_size=ROLLOUT_SIZE, 
                                    mini_batch_size=MINI_BATCH_SIZE,
                                    device=DEVICE)
-
-now = datetime.datetime.now()
-log_filename = now.strftime("%Y-%m-%d_%H-%M-%S")+".txt"
-logger = Logger()
-logger.set_log_file(log_filename, 'log')
 
 trainer = PPOTrainer(
     policy=policy,

@@ -3,6 +3,9 @@ import torch.optim as optim
 
 from DRL.ppo.losses import compute_hierarchical_loss
 from DRL.ppo.gae import compute_hierarchical_gae, compute_gae
+from DRL.utils.logging import Logger
+
+import time
 
 
 class PPOTrainer:
@@ -22,7 +25,7 @@ class PPOTrainer:
 
         self.policy = policy
         self.device = device
-        self.logger = logger
+        self.logger:Logger = logger
 
         self.optimizer = optim.Adam(policy.parameters(), lr=lr)
 
@@ -90,8 +93,11 @@ class PPOTrainer:
 
                 mb_batch = self._index_batch(batch, mb_idx)
 
+                start = time.time()
                 outputs = self.policy.forward_ppo(mb_batch)
-
+                end = time.time()
+                self.logger.log_str("PPO predict: %s seconds"%(end-start))
+                start = end
                 loss, stats = compute_hierarchical_loss(
                     outputs=outputs,
                     batch=mb_batch,
@@ -103,7 +109,9 @@ class PPOTrainer:
                         "entropy_coef": self.entropy_coef
                     }
                 )
-
+                end = time.time()
+                self.logger.log_str("Loss compute: %s seconds"%((end-start)))
+                start = end
                 self.optimizer.zero_grad()
                 loss.backward()
 
@@ -113,7 +121,8 @@ class PPOTrainer:
                 )
 
                 self.optimizer.step()
-
+                end = time.time()
+                self.logger.log_str("Optimize: %s seconds"%((end-start)))
                 self._accumulate_stats(stats_accum, stats)
 
         # --------------------------------------------------------

@@ -54,7 +54,6 @@ class CustomRMSAEnv(RMSAEnv):
         
         self.edge_id = {e:i for i, e in enumerate(self.edge_index)}
         self.all_action_masked = False
-        
        
 
     def compute_granularity(self):
