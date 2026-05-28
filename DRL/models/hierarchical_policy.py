@@ -25,6 +25,7 @@ class SharedEncoder(nn.Module):
         )
 
     def forward(self, obs):
+        # print(obs['edge_features'])
         return self.gnn(obs['edge_features'],
                         obs['edge_index']
             
