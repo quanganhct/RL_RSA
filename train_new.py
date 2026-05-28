@@ -15,6 +15,7 @@ from DRL.ppo.rollout_worker import RolloutWorker
 from DRL.ppo.buffer import HierarchicalRolloutBuffer
 from DRL.ppo.trainer import PPOTrainer
 from DRL.utils.logging import Logger
+from DRL.utils.csv_writer import CSVWriter
 
 import tqdm
 import datetime
@@ -48,7 +49,7 @@ EPISODE_LENGTH = 1000
 MEAN_SERVICE_HOLDING_TIME = 200
 NUM_SPECTRUM_RESOURCES = 300
 
-NUM_ITERATIONS = 600
+NUM_ITERATIONS = 1000
 ROLLOUT_SIZE = EPISODE_LENGTH#4096
 MINI_BATCH_SIZE = 64
 
@@ -155,6 +156,8 @@ all_blocking_service = []
 all_blocking_rate = []
 all_avg_link_utils = []
 
+writer = CSVWriter('result.csv', 'log')
+writer.write(['Reward', 'service_blocking_rate', 'bit_rate_blocking_rate', 'avg_link_utilization'])
 
 for iteration in range(NUM_ITERATIONS):
 
@@ -209,7 +212,8 @@ for iteration in range(NUM_ITERATIONS):
     all_blocking_rate.append(rollout_info['bit_rate_blocking_rate'][-1])
     all_avg_link_utils.append(rollout_info['avg_link_utilization'][-1])
 
-
+    writer.write([mean_reward, rollout_info['service_blocking_rate'][-1], rollout_info['bit_rate_blocking_rate'][-1], \
+                  rollout_info['avg_link_utilization'][-1]])
    
 
     # print(
@@ -248,7 +252,7 @@ for iteration in range(NUM_ITERATIONS):
 
 logger.logger_close()
 print("\nTraining complete.\n")
-
+writer.close()
 
 
 
