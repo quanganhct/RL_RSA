@@ -28,6 +28,13 @@ except Exception:
 # ============================================================
 # LOGGER
 # ============================================================
+class ExactLevelFilter(logging.Filter):
+    def __init__(self, level):
+        self.level = level
+
+    def filter(self, record):
+        # Only allow messages that match the exact level
+        return record.levelno == self.level
 
 class Logger:
 
@@ -57,8 +64,9 @@ class Logger:
             print("[LOGGER] TensorBoard disabled")
 
         self.logger = logging.getLogger(name='main')
+        self.logger.propagate = False
 
-    def set_log_file(self, filename, folder_name):
+    def set_log_file(self, info_filename, debug_filename, folder_name):
         if not os.path.exists(folder_name):
             os.makedirs(folder_name)
 
@@ -69,12 +77,21 @@ class Logger:
                 )
 
         format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        file_handler = logging.FileHandler('%s/%s'%(folder_name, filename), 'w')
+        file_handler = logging.FileHandler('%s/%s'%(folder_name, info_filename), 'w')
         file_handler.setFormatter(format)
+        file_handler.setLevel(logging.INFO)
+        # file_handler.addFilter(ExactLevelFilter(logging.INFO))
+
+        debug_handler = logging.FileHandler('%s/%s'%(folder_name, debug_filename), 'w')
+        debug_handler.setFormatter(format)
+        debug_handler.setLevel(logging.DEBUG)
+        debug_handler.addFilter(ExactLevelFilter(logging.DEBUG))
 
         for handler in self.logger.handlers[:]:
             self.logger.removeHandler(handler)
+
         self.logger.addHandler(file_handler)
+        self.logger.addHandler(debug_handler)
 
     def logger_close(self):
         handlers = self.logger.handlers[:]
@@ -82,6 +99,8 @@ class Logger:
             self.logger.removeHandler(handler)
             handler.close()
 
+    def debug(self, s:str):
+        self.logger.debug(s)
 
     # ========================================================
     # MAIN ENTRY
@@ -93,7 +112,7 @@ class Logger:
         for k, v in metrics.items():
             self._log_scalar(k, v)
 
-        self._print_summary(metrics)
+        # self._print_summary(metrics)
         self.logger.info(f"[STEP {step}]")
         self.log_dict(metrics)
 
@@ -165,11 +184,11 @@ class Logger:
                 first = False
             else:
                 s += f" | {k}={value:.4f}"
-        print(s)
+        # print(s)
         self.logger.info(s)
     
     def log_str(self, s:str):
-        print(s)
+        # print(s)
         self.logger.info(s)
 
     # ========================================================

@@ -46,7 +46,7 @@ print(f"\nUsing device: {DEVICE}\n")
 LOAD = 20
 EPISODE_LENGTH = 50
 MEAN_SERVICE_HOLDING_TIME = 200
-NUM_SPECTRUM_RESOURCES = 380
+NUM_SPECTRUM_RESOURCES = 100
 
 NUM_ITERATIONS = 100
 ROLLOUT_SIZE = 50#4096
@@ -73,6 +73,13 @@ topology = get_topology(
     alpha=1
 )
 
+now = datetime.datetime.now()
+log_filename = now.strftime("%Y-%m-%d_%H-%M-%S")+".txt"
+debug_filename = now.strftime("DEBUG_%Y-%m-%d_%H-%M-%S")+".txt"
+logger = Logger()
+logger.set_log_file(log_filename, debug_filename, 'log')
+
+
 env_args = dict(
     topology=topology,
     seed=SEED,
@@ -86,7 +93,7 @@ env_args = dict(
 )
 
 env = CustomRMSAEnv(**env_args)
-
+env.logger=logger
 
 # ============================================================
 # MODEL
@@ -122,11 +129,6 @@ worker = RolloutWorker(
 
 buffer = HierarchicalRolloutBuffer(rollout_size=ROLLOUT_SIZE, 
                                    mini_batch_size=MINI_BATCH_SIZE)
-
-now = datetime.datetime.now()
-log_filename = now.strftime("%Y-%m-%d_%H-%M-%S")+".txt"
-logger = Logger()
-logger.set_log_file(log_filename, 'log')
 
 trainer = PPOTrainer(
     policy=policy,
