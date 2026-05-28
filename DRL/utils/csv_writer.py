@@ -14,3 +14,4 @@ class CSVWriter:
 
     def write(self, row:typing.List):
         self.writer.writerow(row)
+        self.file.flush()
