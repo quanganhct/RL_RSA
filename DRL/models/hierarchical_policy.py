@@ -106,8 +106,14 @@ class HierarchicalRMSAPolicy(nn.Module):
             path_emb,
             obs["action_masks"]["path"]
         )
-
-        dist = D.Categorical(logits=logits)
+        try:
+            dist = D.Categorical(logits=logits)
+        except Exception as e:
+            print("Edge emb", edge_emb)
+            print("obs candidate path", obs["candidate_paths"])
+            print("Path emb", path_emb)
+            print("Action mask path", obs["action_masks"]["path"])
+            raise e
         
         batch_idx = torch.arange(path_emb.size(0), device=path_emb.device)
 
