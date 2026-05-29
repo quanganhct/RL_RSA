@@ -642,6 +642,7 @@ class CustomRMSAEnv(RMSAEnv):
         )  # measuring compactness after the provisioning
 
         reward = self.reward()
+        self.logger.log_str("ENV Reward %s"%(reward))
         info = {
             "service_blocking_rate": (self.services_processed - self.services_accepted)
             / self.services_processed,
