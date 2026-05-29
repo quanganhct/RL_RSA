@@ -104,7 +104,8 @@ class HierarchicalRMSAPolicy(nn.Module):
 
         logits = self.path_policy(
             path_emb,
-            obs["action_masks"]["path"]
+            obs["action_masks"]["path"],
+            obs["candidate_paths_features"]
         )
         try:
             dist = D.Categorical(logits=logits)
@@ -191,7 +192,8 @@ class HierarchicalRMSAPolicy(nn.Module):
     
         path_logits = self.path_policy(
             path_emb,
-            obs["action_masks"]["path"]
+            obs["action_masks"]["path"],
+            obs["candidate_paths_features"]
         )
     
         path_action = path_logits.argmax(dim=-1)
@@ -294,7 +296,8 @@ class HierarchicalRMSAPolicy(nn.Module):
 
         path_logits = self.path_policy(
             path_emb,
-            batch["action_masks"]["path"]
+            batch["action_masks"]["path"],
+            batch["candidate_paths_features"]
         )
 
         path_actions = batch["path_actions"]

@@ -61,7 +61,9 @@ class RolloutWorker:
         rollout_info = {
 
             "service_blocking_rate": [],
+            "episode_service_blocking_rate": [],
             "bit_rate_blocking_rate": [],
+            "episode_bit_rate_blocking_rate": [],
             "avg_link_utilization": []
         }
 
@@ -158,18 +160,27 @@ class RolloutWorker:
             # =====================================================
             # LOGGING
             # =====================================================
+            for key in rollout_info.keys():
+                
+                rollout_info[key].append(
+                    info[key]
+                )
 
-            rollout_info["service_blocking_rate"].append(
-                info["service_blocking_rate"]
-            )
+            # rollout_info["bit_rate_blocking_rate"].append(
+            #     info["bit_rate_blocking_rate"]
+            # )
+            # rollout_info["bit_rate_blocking_rate"].append(
+            #     info["bit_rate_blocking_rate"]
+            # )
 
-            rollout_info["bit_rate_blocking_rate"].append(
-                info["bit_rate_blocking_rate"]
-            )
+            # rollout_info["bit_rate_blocking_rate"].append(
+            #     info["bit_rate_blocking_rate"]
+            # )
 
-            rollout_info["avg_link_utilization"].append(
-                info["avg_link_utilization"]
-            )
+
+            # rollout_info["avg_link_utilization"].append(
+            #     info["avg_link_utilization"]
+            # )
 
             # =====================================================
             # NEXT STATE

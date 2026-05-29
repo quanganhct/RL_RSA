@@ -505,6 +505,8 @@ class CustomRMSAEnv(RMSAEnv):
         
         if not self.current_service.accepted:
             return -1
+        else:
+            return 1
 
         alpha = 0.4
         beta = 0.3

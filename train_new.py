@@ -44,14 +44,14 @@ print(f"\nUsing device: {DEVICE}\n")
 # CONFIG
 # ============================================================
 
-LOAD = 300
-EPISODE_LENGTH = 300
+LOAD = 80# 300
+EPISODE_LENGTH = 1000
 MEAN_SERVICE_HOLDING_TIME = 200
-NUM_SPECTRUM_RESOURCES = 300
+NUM_SPECTRUM_RESOURCES = 380#300
 
 NUM_ITERATIONS = 1000
 ROLLOUT_SIZE = EPISODE_LENGTH#4096
-MINI_BATCH_SIZE = 64
+MINI_BATCH_SIZE = 128#64
 
 LR = 3e-4
 CLIP_EPS = 0.2
@@ -159,7 +159,11 @@ all_avg_link_utils = []
 
 writer = CSVWriter('result_%s.csv'%(now.strftime("%Y-%m-%d_%H-%M-%S")), 'log')
 
-writer.write(['Reward', 'service_blocking_rate', 'bit_rate_blocking_rate', 'avg_link_utilization'])
+writer.write(['Reward', 'service_blocking_rate', 
+              'episode_service_blocking_rate',
+              'bit_rate_blocking_rate',
+              'episode_bit_rate_blocking_rate',
+              'avg_link_utilization'])
 
 for iteration in range(NUM_ITERATIONS):
 
@@ -197,9 +201,14 @@ for iteration in range(NUM_ITERATIONS):
 
     mean_reward = float(batch["rewards"].mean().item())
     
-   
+    to_print = f"[Iter {iteration:04d}] Reward = {mean_reward:.4f}" + \
+    " service_blocking_rate = {rollout_info['service_blocking_rate'][-1]:.4f} |" +\
+        " episode_service_blocking_rate = {rollout_info['episode_service_blocking_rate'][-1]:.4f} |" +\
+    " bit_rate_blocking_rate = {rollout_info['bit_rate_blocking_rate'][-1]:.4f} | "+\
+        " episode_bit_rate_blocking_rate = {rollout_info['episode_bit_rate_blocking_rate'][-1]:.4f} | "+\
+    "avg_link_utilization = {rollout_info['avg_link_utilization'][-1]:.2f}"
 
-    print(f"[Iter {iteration:04d}] Reward = {mean_reward:.4f} service_blocking_rate = {rollout_info['service_blocking_rate'][-1]:.4f} |bit_rate_blocking_rate = {rollout_info['bit_rate_blocking_rate'][-1]:.4f} | avg_link_utilization = {rollout_info['avg_link_utilization'][-1]:.2f}")
+    print(to_print)
     print("LOSS:", np.mean(stats['loss_total']))
     print("VALUE LOSS", np.mean(stats['value_loss']))
     print("PATH ENTROPY", np.mean(stats['entropy_path']))
@@ -214,7 +223,11 @@ for iteration in range(NUM_ITERATIONS):
     all_blocking_rate.append(rollout_info['bit_rate_blocking_rate'][-1])
     all_avg_link_utils.append(rollout_info['avg_link_utilization'][-1])
 
-    writer.write([mean_reward, rollout_info['service_blocking_rate'][-1], rollout_info['bit_rate_blocking_rate'][-1], \
+    writer.write([mean_reward, 
+                  rollout_info['service_blocking_rate'][-1],
+                  rollout_info['episode_service_blocking_rate'][-1],
+                  rollout_info['bit_rate_blocking_rate'][-1],
+                  rollout_info['episode_bit_rate_blocking_rate'][-1],
                   rollout_info['avg_link_utilization'][-1]])
    
 

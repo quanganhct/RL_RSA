@@ -84,6 +84,11 @@ def batch_observations(obs_list):
         to_tensor(obs["candidate_paths"], dtype=torch.long)
         for obs in obs_list
     ], dim=0)
+    
+    candidate_paths_features = torch.stack([
+        to_tensor(obs["candidate_paths_features"], dtype=torch.long)
+        for obs in obs_list
+    ], dim=0)
 
     path_features = torch.stack([
         to_tensor(obs["path_features"])
@@ -128,6 +133,7 @@ def batch_observations(obs_list):
         "edge_index": edge_index,
 
         "candidate_paths": candidate_paths,
+        "candidate_paths_features":candidate_paths_features,
         "path_features": path_features,
 
         "mod_features": slot_features,
