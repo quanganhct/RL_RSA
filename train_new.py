@@ -163,6 +163,7 @@ writer = CSVWriter('result_%s.csv'%(now.strftime("%Y-%m-%d_%H-%M-%S")), 'log')
 
 writer.write(['Reward', 'service_blocking_rate', 
               'episode_service_blocking_rate',
+              'our_service_blocking_rate',
               'bit_rate_blocking_rate',
               'episode_bit_rate_blocking_rate',
               'avg_link_utilization'])
@@ -206,6 +207,7 @@ for iteration in range(NUM_ITERATIONS):
     to_print = f"[Iter {iteration:04d}] Reward = {mean_reward:.4f}" + \
     f" service_blocking_rate = {rollout_info['service_blocking_rate'][-1]:.4f} |" +\
     f" episode_service_blocking_rate = {rollout_info['episode_service_blocking_rate'][-1]:.4f} |" +\
+    f" our_service_blocking_rate = {rollout_info['our_service_blocking_rate'][-1]:.4f} |" +\
     f" bit_rate_blocking_rate = {rollout_info['bit_rate_blocking_rate'][-1]:.4f} | "+\
     f" episode_bit_rate_blocking_rate = {rollout_info['episode_bit_rate_blocking_rate'][-1]:.4f} | "+\
     f" avg_link_utilization = {rollout_info['avg_link_utilization'][-1]:.2f}"
@@ -228,6 +230,7 @@ for iteration in range(NUM_ITERATIONS):
     writer.write([mean_reward, 
                   rollout_info['service_blocking_rate'][-1],
                   rollout_info['episode_service_blocking_rate'][-1],
+                  rollout_info['our_service_blocking_rate'][-1],
                   rollout_info['bit_rate_blocking_rate'][-1],
                   rollout_info['episode_bit_rate_blocking_rate'][-1],
                   rollout_info['avg_link_utilization'][-1]])

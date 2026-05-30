@@ -62,6 +62,7 @@ class RolloutWorker:
 
             "service_blocking_rate": [],
             "episode_service_blocking_rate": [],
+            "our_service_blocking_rate": [],
             "bit_rate_blocking_rate": [],
             "episode_bit_rate_blocking_rate": [],
             "avg_link_utilization": []
