@@ -204,11 +204,11 @@ for iteration in range(NUM_ITERATIONS):
     mean_reward = float(batch["rewards"].mean().item())
     
     to_print = f"[Iter {iteration:04d}] Reward = {mean_reward:.4f}" + \
-    " service_blocking_rate = {rollout_info['service_blocking_rate'][-1]:.4f} |" +\
-        " episode_service_blocking_rate = {rollout_info['episode_service_blocking_rate'][-1]:.4f} |" +\
-    " bit_rate_blocking_rate = {rollout_info['bit_rate_blocking_rate'][-1]:.4f} | "+\
-        " episode_bit_rate_blocking_rate = {rollout_info['episode_bit_rate_blocking_rate'][-1]:.4f} | "+\
-    "avg_link_utilization = {rollout_info['avg_link_utilization'][-1]:.2f}"
+    f" service_blocking_rate = {rollout_info['service_blocking_rate'][-1]:.4f} |" +\
+    f" episode_service_blocking_rate = {rollout_info['episode_service_blocking_rate'][-1]:.4f} |" +\
+    f" bit_rate_blocking_rate = {rollout_info['bit_rate_blocking_rate'][-1]:.4f} | "+\
+    f" episode_bit_rate_blocking_rate = {rollout_info['episode_bit_rate_blocking_rate'][-1]:.4f} | "+\
+    f" avg_link_utilization = {rollout_info['avg_link_utilization'][-1]:.2f}"
 
     print(to_print)
     print("LOSS:", np.mean(stats['loss_total']))

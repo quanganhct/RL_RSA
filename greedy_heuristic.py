@@ -92,11 +92,11 @@ def first_fit_best_modulation_heuristic(env:CustomRMSAEnv, request:Service):
         if request.accepted:
             break
                 
-def greedy_algorithm(env:CustomRMSAEnv, writer:CSVWriter):
+def greedy_algorithm(env:CustomRMSAEnv, writer:CSVWriter, iteration):
     env._new_service = False
     accepted_count = 0
     for i in range(EPISODE_LENGTH):
-        print("Process request", i)
+        # print("Process request", i)
         env._next_service()
         first_fit_heuristic(env, env.current_service)
         # first_fit_best_modulation_heuristic(env, env.current_service)
@@ -104,6 +104,7 @@ def greedy_algorithm(env:CustomRMSAEnv, writer:CSVWriter):
             accepted_count += 1
         env._new_service = False
     writer.write([EPISODE_LENGTH, accepted_count, float(EPISODE_LENGTH-accepted_count)/EPISODE_LENGTH])
+    print(f"[Iteration = {iteration}] Total = {EPISODE_LENGTH} | accepted_count = {accepted_count} | blocking_rate = {float(EPISODE_LENGTH-accepted_count)/EPISODE_LENGTH}")
 
     
 topology = get_topology(
@@ -139,8 +140,9 @@ writer = CSVWriter(now.strftime("Greedy_firstfit_%Y-%m-%d_%H-%M-%S.csv"), 'log')
 writer.write(['num_request', 'accepted', 'service_blocking_rate'])
 print("Run Greedy Heuristic")
 for i in range(NUM_ITERATIONS):
-    print("Iteration", i)
-    greedy_algorithm(env, writer)
+    # print("Iteration", i)
+    greedy_algorithm(env, writer, i)
+    _ = env.customreset(False)
 
 writer.close()
 
