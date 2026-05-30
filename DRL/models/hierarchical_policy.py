@@ -43,6 +43,7 @@ class HierarchicalRMSAPolicy(nn.Module):
         edge_dim,
         slot_dim,
         path_feature_dim,
+        candidate_feature_dim,
         num_paths,
         num_mods,
         hidden_dim=128
@@ -62,7 +63,8 @@ class HierarchicalRMSAPolicy(nn.Module):
 
         self.path_policy = PathPolicy(
             path_dim=hidden_dim,
-            hidden_dim=hidden_dim
+            hidden_dim=hidden_dim,
+            feature_dim=candidate_feature_dim
         )
 
         self.mod_policy = ModulationPolicy(

@@ -104,6 +104,7 @@ num_paths = env.max_num_path
 num_mods = len(env.topology.graph["modulations"])
 
 edge_dim = 4
+candidate_feature_dim = 1
 path_feature_dim = 1 + 1 + 2 * num_mods
 slot_dim = 2
 
@@ -112,6 +113,7 @@ policy = HierarchicalRMSAPolicy(
     edge_dim=edge_dim,
     slot_dim=slot_dim,
     path_feature_dim=path_feature_dim,
+    candidate_feature_dim=candidate_feature_dim,
     num_paths=num_paths,
     num_mods=num_mods,
     hidden_dim=HIDDEN_DIM

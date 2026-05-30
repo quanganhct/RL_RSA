@@ -194,7 +194,7 @@ class CustomRMSAEnv(RMSAEnv):
             
             pad_paths.append(pad_path)
         
-        return np.array(pad_paths), np.array(path_features)
+        return np.array(pad_paths), np.array([path_features]).T
     
     def get_candidate_paths_length(self):
         if not hasattr(self, "current_service"):
