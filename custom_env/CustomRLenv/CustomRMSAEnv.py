@@ -649,6 +649,10 @@ class CustomRMSAEnv(RMSAEnv):
         if self.current_service.accepted:
             self.accepted_service += 1
         self.logger.log_str("ENV Reward %s"%(reward))
+        
+
+        # informing the blocking rate per bit rate
+        # sorting by the bit rate to match the previous computation
         info = {
             "service_blocking_rate": (self.services_processed - self.services_accepted)
             / self.services_processed,
@@ -686,22 +690,23 @@ class CustomRMSAEnv(RMSAEnv):
             "num_accepted_request": self.accepted_service,
             "num_total_request": self.all_service
         }
-
-        # informing the blocking rate per bit rate
-        # sorting by the bit rate to match the previous computation
+        
         if self.bit_rate_selection == "discrete":
             for bit_rate, blocking in blocking_per_bit_rate.items():
                 info[f"bit_rate_blocking_{bit_rate}"] = blocking
             info["fairness"] = max(blocking_per_bit_rate.values()) - min(
                 blocking_per_bit_rate.values()
             )
+        done = self.episode_services_processed == self.episode_length
 
         self._new_service = False
         self._next_service()
          
 
-        next_state, reward, done, info = self.observation(), reward, \
-                self.episode_services_processed == self.episode_length, info
+        next_state = self.observation()
+                
+                
+        info['done'] = done
 
         # Update node & edge features 
         # print(f'src = {self.current_service.source_id} , dst = {self.current_service.destination_id}')
