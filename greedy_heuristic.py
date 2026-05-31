@@ -24,9 +24,9 @@ def first_fit_heuristic(env:CustomRMSAEnv, request:Service):
         for modulation in reversed(modulations):
             if modulation.spectral_efficiency > path.best_modulation.spectral_efficiency:
                 continue
-            count += 1
-            if count > 2:
-                break
+            # count += 1
+            # if count > 2:
+            #     break
             initial_indexes, lengths = env.get_available_blocks(p, modulation)
             slots = compute_number_of_slots(request.bit_rate, modulation)
             path.current_modulation = modulation
@@ -92,7 +92,7 @@ def first_fit_best_modulation_heuristic(env:CustomRMSAEnv, request:Service):
         if request.accepted:
             break
                 
-def greedy_algorithm(env:CustomRMSAEnv, writer:CSVWriter, iteration):
+def greedy_algorithm(env:CustomRMSAEnv, iteration):
     env._new_service = False
     accepted_count = 0
     for i in range(EPISODE_LENGTH):
@@ -103,46 +103,57 @@ def greedy_algorithm(env:CustomRMSAEnv, writer:CSVWriter, iteration):
         if env.current_service.accepted:
             accepted_count += 1
         env._new_service = False
-    writer.write([EPISODE_LENGTH, accepted_count, float(EPISODE_LENGTH-accepted_count)/EPISODE_LENGTH])
-    print(f"[Iteration = {iteration}] Total = {EPISODE_LENGTH} | accepted_count = {accepted_count} | blocking_rate = {float(EPISODE_LENGTH-accepted_count)/EPISODE_LENGTH}")
-
     
-topology = get_topology(
-    './data/germany/sndlib_germany.txt',
-    'Germany',
-    sndformat=True,
-    alpha=1
-)
+    print(f"[Iteration = {iteration}] Total = {EPISODE_LENGTH} | accepted_count = {accepted_count} | blocking_rate = {float(EPISODE_LENGTH-accepted_count)/EPISODE_LENGTH}")
+    return accepted_count
+
+
+topology_data = [dict(file_name='./data/european/european.txt', topology_name='European', sndformat=False, undirected_file=False),\
+                 dict(file_name='./data/nsf/nsfnet_chen.txt', topology_name='NSF', sndformat=False, undirected_file=True),\
+                 dict(file_name='./data/usa/backbone.txt', topology_name='USA', sndformat=False, undirected_file=False),\
+                 dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True)]
 
 now = datetime.datetime.now()
-log_filename = now.strftime("Greedy_%Y-%m-%d_%H-%M-%S")+".txt"
-debug_filename = now.strftime("Greedy_DEBUG_%Y-%m-%d_%H-%M-%S")+".txt"
-logger = Logger()
-logger.set_log_file(log_filename, debug_filename, 'log')
+writer = CSVWriter(now.strftime("Greedy_firstfit_ksp_%Y-%m-%d_%H-%M-%S.csv"), 'log')
+writer.write(['topology_name', 'load', 'num_request', 'accepted', 'service_blocking_rate'])
 
-# bitrates = np.arange(25, 101, 5)
+loads = [80, 100, 200, 300, 500]
+for arg in topology_data:
+    topology = get_topology(**arg, k_paths=5)
 
-env_args = dict(
-    topology=topology,
-    seed=SEED,
-    allow_rejection=True,
-    load=LOAD,
-    mean_service_holding_time=MEAN_SERVICE_HOLDING_TIME,
-    episode_length=EPISODE_LENGTH,
-    num_spectrum_resources=NUM_SPECTRUM_RESOURCES,
-    bit_rates=constant.bit_rates,
-    bit_rate_selection="discrete",
-)
+    for load in loads:
 
-env = CustomRMSAEnv(**env_args)
-env.logger=logger
-writer = CSVWriter(now.strftime("Greedy_firstfit_%Y-%m-%d_%H-%M-%S.csv"), 'log')
-writer.write(['num_request', 'accepted', 'service_blocking_rate'])
-print("Run Greedy Heuristic")
-for i in range(NUM_ITERATIONS):
-    # print("Iteration", i)
-    greedy_algorithm(env, writer, i)
-    _ = env.customreset(False)
+        now = datetime.datetime.now()
+        log_filename = now.strftime("Greedy_%Y-%m-%d_%H-%M-%S")+".txt"
+        debug_filename = now.strftime("Greedy_DEBUG_%Y-%m-%d_%H-%M-%S")+".txt"
+        logger = Logger()
+        logger.set_log_file(log_filename, debug_filename, 'log')
+
+        # bitrates = np.arange(25, 101, 5)
+
+        env_args = dict(
+            topology=topology,
+            seed=SEED,
+            allow_rejection=True,
+            load=load,
+            mean_service_holding_time=MEAN_SERVICE_HOLDING_TIME,
+            episode_length=EPISODE_LENGTH,
+            num_spectrum_resources=NUM_SPECTRUM_RESOURCES,
+            bit_rates=constant.bit_rates,
+            bit_rate_probabilities=[0.5, 0.3, 0.2],
+            bit_rate_selection="discrete",
+        )
+
+        env = CustomRMSAEnv(**env_args)
+        env.logger=logger
+        
+        print("Run Greedy Heuristic")
+        for i in range(2):
+            # print("Iteration", i)
+            nbaccepted = greedy_algorithm(env, i)
+            sbr = float(EPISODE_LENGTH - nbaccepted)/EPISODE_LENGTH
+            writer.write([arg['topology_name'], load, EPISODE_LENGTH, nbaccepted, sbr])
+            _ = env.customreset(False)
 
 writer.close()
 
