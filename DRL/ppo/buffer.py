@@ -37,6 +37,7 @@ class HierarchicalRolloutBuffer:
         self.slot_masks = []
 
         self.candidate_paths = []
+        self.candidate_paths_features = []
 
         # --------------------------------------------------------
         # ACTIONS
@@ -123,6 +124,10 @@ class HierarchicalRolloutBuffer:
         self.candidate_paths.append(
             obs["candidate_paths"].detach().cpu()
         )
+        
+        self.candidate_paths_features.append(
+            obs["candidate_paths_features"].detach().cpu()
+        )
 
         # --------------------------------------------------------
         # ACTIONS
@@ -196,6 +201,9 @@ class HierarchicalRolloutBuffer:
 
             "candidate_paths":
                 torch.cat(self.candidate_paths, dim=0).to(self.device),
+                
+            "candidate_paths_features":
+                torch.cat(self.candidate_paths_features, dim=0).to(self.device),
 
             # ----------------------------------------------------
             # MASKS

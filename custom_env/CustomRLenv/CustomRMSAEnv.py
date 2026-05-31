@@ -54,7 +54,8 @@ class CustomRMSAEnv(RMSAEnv):
         
         self.edge_id = {e:i for i, e in enumerate(self.edge_index)}
         self.all_action_masked = False
-       
+        self.accepted_service = 0
+        self.all_service = 0
 
     def compute_granularity(self):
         granularity = []
@@ -194,7 +195,7 @@ class CustomRMSAEnv(RMSAEnv):
             
             pad_paths.append(pad_path)
         
-        return np.array(pad_paths), np.array(path_features)
+        return np.array(pad_paths), np.array([path_features]).T
     
     def get_candidate_paths_length(self):
         if not hasattr(self, "current_service"):
@@ -505,6 +506,8 @@ class CustomRMSAEnv(RMSAEnv):
         
         if not self.current_service.accepted:
             return -1
+        else:
+            return 1
 
         alpha = 0.4
         beta = 0.3
@@ -619,6 +622,7 @@ class CustomRMSAEnv(RMSAEnv):
 
         if not self.current_service.accepted:
             self.actions_taken[self.max_num_path, self.num_spectrum_resources] += 1
+            
 
         self.topology.graph["services"].append(self.current_service)
 
@@ -640,6 +644,10 @@ class CustomRMSAEnv(RMSAEnv):
         )  # measuring compactness after the provisioning
 
         reward = self.reward()
+        
+        self.all_service += 1
+        if self.current_service.accepted:
+            self.accepted_service += 1
         self.logger.log_str("ENV Reward %s"%(reward))
         info = {
             "service_blocking_rate": (self.services_processed - self.services_accepted)
@@ -648,6 +656,10 @@ class CustomRMSAEnv(RMSAEnv):
                 self.episode_services_processed - self.episode_services_accepted
             )
             / self.episode_services_processed,
+            "our_service_blocking_rate": (
+                self.all_service - self.accepted_service
+            )
+            / self.all_service,
             "bit_rate_blocking_rate": (
                 self.bit_rate_requested - self.bit_rate_provisioned
             )
@@ -1075,6 +1087,8 @@ class CustomRMSAEnv(RMSAEnv):
         self.selected_path_id = None
         self.selected_mod_id = None
         self.selected_slot_id =  None
+        self.accepted_service = 0
+        self.all_service = 0
        
         obs = super().reset(only_episode_counters)
         
