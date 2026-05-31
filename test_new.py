@@ -74,6 +74,12 @@ topology_data = [dict(file_name='./data/germany/sndlib_germany.txt', topology_na
 
 loads = [80, 100, 200, 300, 500]
 
+# topology_data = [#dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True),\
+#                   dict(file_name='./data/european/european.txt', topology_name='European', sndformat=False, undirected_file=False),\
+#                   ]
+
+# loads = [80]
+
 now = datetime.datetime.now()
 writer = CSVWriter('Test_load_result_%s.csv'%(now.strftime("%Y-%m-%d_%H-%M-%S")), 'log')
 
@@ -82,7 +88,8 @@ writer.write(['topology_name', 'load', 'Reward', 'service_blocking_rate',
               'our_service_blocking_rate',
               'bit_rate_blocking_rate',
               'episode_bit_rate_blocking_rate',
-              'avg_link_utilization'])
+              'avg_link_utilization',
+              'done'])
 
 for arg in topology_data:
     # topology = get_topology(
@@ -97,8 +104,8 @@ for arg in topology_data:
 
     for load in loads:
         now = datetime.datetime.now()
-        log_filename = now.strftime("%Y-%m-%d_%H-%M-%S")+".txt"
-        debug_filename = now.strftime("DEBUG_%Y-%m-%d_%H-%M-%S")+".txt"
+        log_filename = now.strftime("TEST%Y-%m-%d_%H-%M-%S")+".txt"
+        debug_filename = now.strftime("TESTDEBUG_%Y-%m-%d_%H-%M-%S")+".txt"
         logger = Logger()
         logger.set_log_file(log_filename, debug_filename, 'log')
         
@@ -187,7 +194,7 @@ for arg in topology_data:
         determistic = True
         best_rate = 2
         for iteration in range(NUM_ITERATIONS):
-        
+            
             buffer.clear()
         
             # --------------------------------------------------------
@@ -254,6 +261,8 @@ for arg in topology_data:
                           rollout_info['episode_bit_rate_blocking_rate'][-1],
                           rollout_info['avg_link_utilization'][-1]])
            
+            
+            print(rollout_info['done']) 
         
             # print(
             #     f"[Iter {iteration:04d}] "

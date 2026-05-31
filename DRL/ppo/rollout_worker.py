@@ -65,7 +65,8 @@ class RolloutWorker:
             "our_service_blocking_rate": [],
             "bit_rate_blocking_rate": [],
             "episode_bit_rate_blocking_rate": [],
-            "avg_link_utilization": []
+            "avg_link_utilization": [],
+            'done': []
         }
 
         while not buffer.is_full():
@@ -193,11 +194,12 @@ class RolloutWorker:
                 # buffer.last_obs = obs
 
                 self.obs = self.env.customreset(False)
+                print(f'done with buffer size = {buffer.ptr}')
 
             else:
 
                 self.obs = next_obs
-
+        print(f"full when buffer is size is {buffer.ptr}")
         # =========================================================
         # BOOTSTRAP VALUE
         # =========================================================

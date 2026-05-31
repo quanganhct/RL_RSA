@@ -577,6 +577,7 @@ class RMSAEnv(OpticalNetworkEnv):
 
         self.services_processed += 1
         self.episode_services_processed += 1
+        # print("eps count", self.episode_services_processed)
 
         # registering statistics about the bit rate requested
         self.bit_rate_requested += self.current_service.bit_rate
