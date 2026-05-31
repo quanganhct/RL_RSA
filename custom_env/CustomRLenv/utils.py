@@ -89,20 +89,20 @@ modulations = (
         minimum_osnr=22.4,
         inband_xt=-23,
     ),
-    Modulation(
-        name="32QAM",
-        maximum_length=250,
-        spectral_efficiency=5,
-        minimum_osnr=26.4,
-        inband_xt=-26,
-    ),
-    Modulation(
-        name="64QAM",
-        maximum_length=125,
-        spectral_efficiency=6,
-        minimum_osnr=30.4,
-        inband_xt=-29,
-    ),
+    # Modulation(
+    #     name="32QAM",
+    #     maximum_length=250,
+    #     spectral_efficiency=5,
+    #     minimum_osnr=26.4,
+    #     inband_xt=-26,
+    # ),
+    # Modulation(
+    #     name="64QAM",
+    #     maximum_length=125,
+    #     spectral_efficiency=6,
+    #     minimum_osnr=30.4,
+    #     inband_xt=-29,
+    # ),
 )
 
 def distance(origin, destination):
