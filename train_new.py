@@ -66,13 +66,20 @@ HIDDEN_DIM = 128
 # ============================================================
 # ENVIRONMENT
 # ============================================================
+topology_data = [dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True),\
+                 dict(file_name='./data/european/european.txt', topology_name='European', sndformat=False, undirected_file=False),\
+                 dict(file_name='./data/nsf/nsfnet_chen.txt', topology_name='NSF', sndformat=False, undirected_file=True),\
+                 dict(file_name='./data/usa/backbone.txt', topology_name='USA', sndformat=False, undirected_file=False)]
 
-topology = get_topology(
-    './data/germany/sndlib_germany.txt',
-    'Germany',
-    sndformat=True,
-    alpha=1
-)
+
+topology = get_topology(**topology_data[2], alpha=1)
+
+# topology = get_topology(
+#     './data/germany/sndlib_germany.txt',
+#     'Germany',
+#     sndformat=True,
+#     alpha=1
+# )
 
 now = datetime.datetime.now()
 log_filename = now.strftime("%Y-%m-%d_%H-%M-%S")+".txt"
