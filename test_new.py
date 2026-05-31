@@ -45,7 +45,7 @@ print(f"\nUsing device: {DEVICE}\n")
 # ============================================================
 
 LOAD = 80# 300
-EPISODE_LENGTH = 1000
+EPISODE_LENGTH = 10
 MEAN_SERVICE_HOLDING_TIME = 200
 NUM_SPECTRUM_RESOURCES = 380#300
 
@@ -266,11 +266,12 @@ for arg in topology_data:
                           rollout_info['our_service_blocking_rate'][-1],
                           rollout_info['bit_rate_blocking_rate'][-1],
                           rollout_info['episode_bit_rate_blocking_rate'][-1],
-                          rollout_info['avg_link_utilization'][-1]],
-                          rollout_info['num_accepted_request'],
-                          rollout_info['num_total_request'])
+                          rollout_info['avg_link_utilization'][-1],
+                          rollout_info['num_accepted_request'][-1],
+                          rollout_info['num_total_request'][-1]])
            
-                    
+            # print(rollout_info['num_accepted_request'])
+            # print(rollout_info['num_total_request'])         
             # print(
             #     f"[Iter {iteration:04d}] "
             #     f"Reward={mean_reward:.4f} | "

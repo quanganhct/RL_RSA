@@ -68,6 +68,7 @@ class RolloutWorker:
             "avg_link_utilization": [],
             'num_accepted_request': [],
             'num_total_request': [],
+            'done': []
         }
 
         while not buffer.is_full():
