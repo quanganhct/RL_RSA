@@ -65,7 +65,9 @@ class RolloutWorker:
             "our_service_blocking_rate": [],
             "bit_rate_blocking_rate": [],
             "episode_bit_rate_blocking_rate": [],
-            "avg_link_utilization": []
+            "avg_link_utilization": [],
+            'num_accepted_request': [],
+            'num_total_request': []
         }
 
         while not buffer.is_full():

@@ -683,6 +683,8 @@ class CustomRMSAEnv(RMSAEnv):
                     for lnk in self.topology.edges()
                 ]
             ),
+            "num_accepted_request": self.accepted_service,
+            "num_total_request": self.all_service
         }
 
         # informing the blocking rate per bit rate

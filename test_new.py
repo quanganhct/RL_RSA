@@ -36,7 +36,7 @@ random.seed(SEED)
 # ============================================================
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# DEVICE = 'cpu'
+DEVICE = 'cpu'
 print(f"\nUsing device: {DEVICE}\n")
 
 
@@ -67,12 +67,17 @@ HIDDEN_DIM = 128
 # ENVIRONMENT
 # ============================================================
 
-topology_data = [dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True),\
-                 dict(file_name='./data/european/european.txt', topology_name='European', sndformat=False, undirected_file=False),\
-                 dict(file_name='./data/nsf/nsfnet_chen.txt', topology_name='NSF', sndformat=False, undirected_file=True),\
-                 dict(file_name='./data/usa/backbone.txt', topology_name='USA', sndformat=False, undirected_file=False)]
+# topology_data = [dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True),\
+#                  dict(file_name='./data/european/european.txt', topology_name='European', sndformat=False, undirected_file=False),\
+#                  dict(file_name='./data/nsf/nsfnet_chen.txt', topology_name='NSF', sndformat=False, undirected_file=True),\
+#                  dict(file_name='./data/usa/backbone.txt', topology_name='USA', sndformat=False, undirected_file=False)]
 
-loads = [80, 100, 200, 300, 500]
+# loads = [80, 100, 200, 300, 500]
+
+topology_data = [dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True)]
+
+loads = [200]
+
 
 now = datetime.datetime.now()
 writer = CSVWriter('Test_load_result_%s.csv'%(now.strftime("%Y-%m-%d_%H-%M-%S")), 'log')
@@ -82,7 +87,9 @@ writer.write(['topology_name', 'load', 'Reward', 'service_blocking_rate',
               'our_service_blocking_rate',
               'bit_rate_blocking_rate',
               'episode_bit_rate_blocking_rate',
-              'avg_link_utilization'])
+              'avg_link_utilization',
+              'num_accepted_request',
+              'num_total_request'])
 
 for arg in topology_data:
     # topology = get_topology(
@@ -252,7 +259,9 @@ for arg in topology_data:
                           rollout_info['our_service_blocking_rate'][-1],
                           rollout_info['bit_rate_blocking_rate'][-1],
                           rollout_info['episode_bit_rate_blocking_rate'][-1],
-                          rollout_info['avg_link_utilization'][-1]])
+                          rollout_info['avg_link_utilization'][-1]],
+                          rollout_info['num_accepted_request'],
+                          rollout_info['num_total_request'])
            
         
             # print(
