@@ -95,7 +95,7 @@ class HierarchicalRMSAPolicy(nn.Module):
     # PATH ACTION
     # ============================================================
 
-    def act_path(self, obs):
+    def act_path(self, obs, deterministic):
 
         edge_emb = self.encoder(obs)
 
@@ -109,18 +109,17 @@ class HierarchicalRMSAPolicy(nn.Module):
             obs["action_masks"]["path"],
             obs["candidate_paths_features"]
         )
-        try:
+       
+        if deterministic:
             dist = D.Categorical(logits=logits)
-        except Exception as e:
-            print("Edge emb", edge_emb)
-            print("obs candidate path", obs["candidate_paths"])
-            print("Path emb", path_emb)
-            print("Action mask path", obs["action_masks"]["path"])
-            raise e
+            action = torch.argmax(logits).unsqueeze(0) 
+        else:
+            dist = D.Categorical(logits=logits)
+            action = dist.sample()
+      
         
         batch_idx = torch.arange(path_emb.size(0), device=path_emb.device)
-
-        action = dist.sample()
+        
         logprob = dist.log_prob(action)
 
         return action, logprob, {
@@ -133,17 +132,21 @@ class HierarchicalRMSAPolicy(nn.Module):
     # MODULATION ACTION
     # ============================================================
 
-    def act_modulation(self, obs, path_emb):
+    def act_modulation(self, obs, path_emb, deterministic):
 
         logits, context  = self.mod_policy(
             path_emb,
             obs["path_features"],
             obs["action_masks"]["mod"]
         )
-
-        dist = D.Categorical(logits=logits)
-
-        action = dist.sample()
+        
+        if deterministic:
+            dist = D.Categorical(logits=logits)
+            action = torch.argmax(logits).unsqueeze(0) 
+        else:
+            dist = D.Categorical(logits=logits)
+    
+            action = dist.sample()
         logprob = dist.log_prob(action)
 
         selected_mod_emb = self.mod_policy.build_spectrum_context(
@@ -157,7 +160,7 @@ class HierarchicalRMSAPolicy(nn.Module):
     # SLOT ACTION
     # ============================================================
 
-    def act_slot(self, obs, cache):
+    def act_slot(self, obs, cache, deterministic):
         path_emb = cache["selected_path_emb"] #.unsqueeze(0)
         mod_emb = cache["selected_mod_emb"]
 
@@ -167,10 +170,15 @@ class HierarchicalRMSAPolicy(nn.Module):
             mod_emb,
             obs["action_masks"]["slot"]
         )
-
-        dist = D.Categorical(logits=logits)
-
-        action = dist.sample()
+        
+        if deterministic:
+            dist = D.Categorical(logits=logits)
+            action = torch.argmax(logits).unsqueeze(0) 
+        else:
+    
+            dist = D.Categorical(logits=logits)
+    
+            action = dist.sample()
         logprob = dist.log_prob(action)
 
         return action, logprob
