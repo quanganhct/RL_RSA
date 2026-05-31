@@ -168,6 +168,8 @@ writer.write(['Reward', 'service_blocking_rate',
               'episode_bit_rate_blocking_rate',
               'avg_link_utilization'])
 
+determistic = False
+best_rate = 2
 for iteration in range(NUM_ITERATIONS):
 
     buffer.clear()
@@ -176,7 +178,7 @@ for iteration in range(NUM_ITERATIONS):
     # ROLLOUT COLLECTION (FIXED SIZE PPO)
     # --------------------------------------------------------
 
-    last_value, rollout_info = worker.collect_rollout(buffer)
+    last_value, rollout_info = worker.collect_rollout(buffer, determistic)
 
     # --------------------------------------------------------
     # BUILD BATCH
@@ -257,18 +259,34 @@ for iteration in range(NUM_ITERATIONS):
     # --------------------------------------------------------
     # CHECKPOINTING
     # --------------------------------------------------------
-
+    new_rate = rollout_info['our_service_blocking_rate'][-1]
     # if iteration % 100 == 0:
+    if best_rate > new_rate and new_rate != 0:
+        determistic = True
 
-    #     checkpoint = {
-    #         "iteration": iteration,
-    #         "model_state_dict": policy.state_dict(),
-    #         "optimizer_state_dict": trainer.optimizer.state_dict()
-    #     }
+        checkpoint = {
+            "iteration": iteration,
+            "model_state_dict": policy.state_dict(),
+            "optimizer_state_dict": trainer.optimizer.state_dict()
+        }
 
-    #     torch.save(checkpoint, f"checkpoint_{iteration}.pt")
+        torch.save(checkpoint, f"checkpoint_iter_{iteration}_rate_{new_rate}.pt")
 
-    #     print(f"Checkpoint saved at iteration {iteration}")
+        print(f"Checkpoint saved at iteration {iteration}")
+        best_rate = new_rate
+    else:
+        determistic = False
+        
+    if iteration % 5 == 0:
+        checkpoint = {
+            "iteration": iteration,
+            "model_state_dict": policy.state_dict(),
+            "optimizer_state_dict": trainer.optimizer.state_dict()
+        }
+
+        torch.save(checkpoint, f"checkpoint_iter_{iteration}_rate_{new_rate}.pt")
+
+        print(f"Checkpoint saved at iteration {iteration}")
 
 logger.logger_close()
 print("\nTraining complete.\n")

@@ -52,7 +52,7 @@ class RolloutWorker:
     # COLLECT PPO ROLLOUT
     # ============================================================
 
-    def collect_rollout(self, buffer):
+    def collect_rollout(self, buffer, deterministic=False):
 
         """
         Fills PPO rollout buffer until full.
@@ -79,7 +79,7 @@ class RolloutWorker:
             with torch.no_grad():
 
                 path_action, path_logprob, cache = (
-                    self.policy.act_path(obs)
+                    self.policy.act_path(obs, deterministic)
                 )
 
             obs_after_path, _ = self.env.step_path(
@@ -96,7 +96,8 @@ class RolloutWorker:
                 mod_action, mod_logprob, mod_emb = (
                     self.policy.act_modulation(
                         self._to_device(obs_after_path),
-                        cache['selected_path_emb']
+                        cache['selected_path_emb'],
+                        deterministic
                     )
                 )
 
@@ -116,7 +117,8 @@ class RolloutWorker:
                 slot_action, slot_logprob = (
                     self.policy.act_slot(
                         self._to_device(obs_after_mod),
-                        cache
+                        cache,
+                        deterministic
                     )
                 )
 
@@ -204,6 +206,7 @@ class RolloutWorker:
 
             last_value = self.policy.evaluate_value(
                 self._to_device(next_obs) #self.obs
+                
             )
 
         return last_value, rollout_info
