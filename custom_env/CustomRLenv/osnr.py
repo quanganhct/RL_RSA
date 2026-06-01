@@ -142,8 +142,31 @@ def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=T
                 if service.service_id != current_service.service_id:
                     d_frequency = abs(service.center_frequency - current_service.center_frequency)
 
-                    phi_xci = np.log(abs(d_frequency + service.bandwidth/2) / \
-                                abs(d_frequency - service.bandwidth/2))
+                    phi_xci = asinh(
+                            pi ** 2 * \
+                            abs(beta_2) * \
+                            l_eff_a * \
+                            service.bandwidth * \
+                            (  
+                                service.center_frequency - \
+                                current_service.center_frequency + \
+                                (service.bandwidth / 2)
+                            )
+                        ) - \
+                        asinh(
+                            pi ** 2 * \
+                            abs(beta_2) * \
+                            l_eff_a * \
+                            service.bandwidth * \
+                            (  
+                                service.center_frequency - \
+                                current_service.center_frequency - \
+                                (service.bandwidth / 2)
+                            )
+                        ) - \
+                        (phi_modulation_format[service.path.current_modulation.spectral_efficiency - 1] * \
+                        (service.bandwidth / abs(service.center_frequency - current_service.center_frequency)) * \
+                        5 / 3 * (l_eff / (constant.fiber_span * 1e3)))
 
                     if service.service_id not in current_service.nli_inf_from:
                         current_service.nli_inf_from[service.service_id] = 0

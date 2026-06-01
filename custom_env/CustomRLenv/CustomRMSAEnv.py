@@ -544,6 +544,14 @@ class CustomRMSAEnv(RMSAEnv):
     # Custom step to update features
     # -----------------------------
     def step(self, selected_slot):
+        self.logger.debug(
+            "{} Processing path {} on initial slot {} for {} slots".format(
+                self.current_service.service_id,
+                self.k_shortest_paths[self.current_service.source, self.current_service.destination][self.selected_path_id].node_list,
+                selected_slot,
+                self.get_number_slots(self.k_shortest_paths[self.current_service.source, self.current_service.destination][self.selected_path_id]),
+            )
+        )
         self.selected_slot_id = int(selected_slot)
         
         # print(f'path = {self.selected_path_id} mod = {self.selected_mod_id} slot = {self.selected_slot_id}')
@@ -618,7 +626,19 @@ class CustomRMSAEnv(RMSAEnv):
                             ] += 1  # populate the histogram of bit rates
                         self._add_release(self.current_service)
                     else:
+                        self.logger.debug("{} Processing fail because of OSNR: {} vs threshold: {}".format(
+                                            self.current_service.service_id, osnr, selected_path.current_modulation.minimum_osnr + constant.osnr_margin))
                         self.current_service.accepted = False
+                else:
+                    self.logger.debug("{} Processing fail to allocate slots".format(
+                                    self.current_service.service_id))
+            else:
+                self.logger.debug("{} Processing fail to select modulation".format(
+                                    self.current_service.service_id))
+        else:
+            self.logger.debug("{} Processing fail to select path".format(
+                                    self.current_service.service_id))
+            
 
         if not self.current_service.accepted:
             self.actions_taken[self.max_num_path, self.num_spectrum_resources] += 1
