@@ -24,9 +24,9 @@ def first_fit_heuristic(env:CustomRMSAEnv, request:Service):
         for modulation in reversed(modulations):
             if modulation.spectral_efficiency > path.best_modulation.spectral_efficiency:
                 continue
-            # count += 1
-            # if count > 2:
-            #     break
+            count += 1
+            if count > 2:
+                break
             initial_indexes, lengths = env.get_available_blocks(p, modulation)
             slots = compute_number_of_slots(request.bit_rate, modulation)
             path.current_modulation = modulation
@@ -66,12 +66,15 @@ def first_fit_best_modulation_heuristic(env:CustomRMSAEnv, request:Service):
         modulation = path.best_modulation
 
         initial_indexes, lengths = env.get_available_blocks(p, modulation)
-        slots = compute_number_of_slots(request.bit_rate, modulation)
+        slots = compute_number_of_slots(request.bit_rate, modulation) + 1
         path.current_modulation = modulation
 
         for i in range(len(initial_indexes)):
             initial_slot = initial_indexes[i]
             length = lengths[i]
+
+            if not env.is_path_free(path, initial_slot, slots):
+                continue
 
             request.path = path
             request.initial_slot = initial_slot
@@ -91,7 +94,59 @@ def first_fit_best_modulation_heuristic(env:CustomRMSAEnv, request:Service):
 
         if request.accepted:
             break
+
+def first_fit_heuristic_modulation_first(env:CustomRMSAEnv, request:Service):
+    src, dst = request.source, request.destination
+    paths:Collection[Path] = env.k_shortest_paths[src, dst]
+    request.accepted = False
+
+    modulation_count = 0
+
+    for mod_count in range(2):
+        for p in range(len(paths)):
+            path = paths[p]
+            
+            modulation_count = 0
+            for modulation in reversed(modulations):
+                if modulation.spectral_efficiency > path.best_modulation.spectral_efficiency:
+                    continue
                 
+                if modulation_count < mod_count:
+                    modulation_count += 1
+                    continue
+
+                initial_indexes, lengths = env.get_available_blocks(p, modulation)
+                slots = compute_number_of_slots(request.bit_rate, modulation)
+                path.current_modulation = modulation
+
+                for i in range(len(initial_indexes)):
+                    initial_slot = initial_indexes[i]
+                    length = lengths[i]
+
+                    request.path = path
+                    request.initial_slot = initial_slot
+                    request.number_slots = slots
+                    request.center_frequency = constant.frequency_start \
+                        + constant.frequency_slot_bandwidth * initial_slot \
+                        + constant.frequency_slot_bandwidth * (slots / 2.0)
+                    request.bandwidth = constant.frequency_slot_bandwidth * slots
+                    request.launch_power = env.launch_power
+
+                    osnr, ase, nli = compute_ase_nli(env, request)
+                    if osnr >= path.current_modulation.minimum_osnr + constant.osnr_margin:
+                        env._provision_path(path, initial_slot, slots)
+                        request.accepted = True
+                        env._add_release(request)
+                        break
+
+                if request.accepted:
+                    break
+            if request.accepted:
+                break
+        if request.accepted:
+            break
+            
+
 def greedy_algorithm(env:CustomRMSAEnv, iteration):
     env._new_service = False
     accepted_count = 0
@@ -100,6 +155,7 @@ def greedy_algorithm(env:CustomRMSAEnv, iteration):
         env._next_service()
         first_fit_heuristic(env, env.current_service)
         # first_fit_best_modulation_heuristic(env, env.current_service)
+        # first_fit_heuristic_modulation_first(env, env.current_service)
         if env.current_service.accepted:
             accepted_count += 1
         env._new_service = False
@@ -117,9 +173,12 @@ now = datetime.datetime.now()
 writer = CSVWriter(now.strftime("Greedy_firstfit_ksp_%Y-%m-%d_%H-%M-%S.csv"), 'log')
 writer.write(['topology_name', 'load', 'num_request', 'accepted', 'service_blocking_rate'])
 
-loads = [80, 100, 200, 300, 500]
+
+topology_data = [dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True)]
+loads = [80, 200, 500]
+
 for arg in topology_data:
-    topology = get_topology(**arg, k_paths=5)
+    topology = get_topology(**arg, alpha=1)
 
     for load in loads:
 
@@ -138,9 +197,9 @@ for arg in topology_data:
             load=load,
             mean_service_holding_time=MEAN_SERVICE_HOLDING_TIME,
             episode_length=EPISODE_LENGTH,
-            num_spectrum_resources=NUM_SPECTRUM_RESOURCES,
+            num_spectrum_resources=300,
             bit_rates=constant.bit_rates,
-            bit_rate_probabilities=[0.5, 0.3, 0.2],
+            # bit_rate_probabilities=[0.5, 0.3, 0.2],
             bit_rate_selection="discrete",
         )
 
@@ -148,7 +207,7 @@ for arg in topology_data:
         env.logger=logger
         
         print("Run Greedy Heuristic")
-        for i in range(2):
+        for i in range(3):
             # print("Iteration", i)
             nbaccepted = greedy_algorithm(env, i)
             sbr = float(EPISODE_LENGTH - nbaccepted)/EPISODE_LENGTH
