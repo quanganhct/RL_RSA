@@ -32,6 +32,8 @@ class Path:
     length: Union[int, float]
     best_modulation: Optional[Modulation] = field(default=None)
     current_modulation: Optional[Modulation] = field(default=None)
+    normalized_length: float = 0
+    normalized_num_hops: float = 0
 
 
 @dataclass(repr=False)

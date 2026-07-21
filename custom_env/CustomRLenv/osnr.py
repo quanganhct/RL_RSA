@@ -9,6 +9,8 @@ from typing import List, Collection
 
 from custom_env.optical_rl_gym.envs.rmsa_env import RMSAEnv, Service, Path
 from custom_env.optical_rl_gym.utils import Modulation
+from custom_env.CustomRLenv.utils import modulations, compute_number_of_slots
+
 
 # Compute OSNR without writing the OSNR factors into env
 def eval_osnr(env: RMSAEnv, current_service: Service):
@@ -320,3 +322,48 @@ def compute_min_gap_osnr(env: RMSAEnv, new_service: Service, path: Path, modulat
 
     min_gap, sid = min(result, key=lambda x: x[0])
     return min_gap, sid
+
+def compute_max_osnr(launch_power: float, bitrate: list[float], nbspan=1):
+    beta_2: float = -21.3e-27  
+    gamma: float = 1.3e-3  
+    h_plank: float = 6.626e-34  
+    l_eff: float = 0
+    power_ase: float = 0
+
+    attenuation_normalized = constant.attenuation_db_km / (2 * 10 * np.log10(np.exp(1)) * 1e3)
+    noise_figure_normalized = 10 ** (constant.noise_figure_db / 10)
+
+    l_eff = (1 - np.exp(-2 * attenuation_normalized * constant.fiber_span * 1e3)) / (2 * attenuation_normalized)
+
+    nli_coef = (8 / (27 * pi * abs(beta_2))) * gamma ** 2 * l_eff
+
+    result = dict()
+    max_osnr = 0
+    center_frequency = constant.frequency_start
+    #ASE
+    for rate in bitrate:
+        result[rate] = dict()
+        for modulation in modulations:
+            nbslot = compute_number_of_slots(rate, modulation)
+            bandwidth = nbslot * constant.frequency_slot_bandwidth
+            power_ase = nbspan * bandwidth * h_plank * center_frequency * \
+                    (exp(2 * attenuation_normalized * constant.fiber_span * 1e3) - 1) * noise_figure_normalized
+
+
+            phi_sci = asinh(pi ** 2 * abs(beta_2) * (bandwidth) ** 2 / \
+                                    (4 * attenuation_normalized))
+            
+            
+
+            #SCI
+            power_sci = nbspan * (launch_power / bandwidth) ** 3 * \
+                                nli_coef * bandwidth * phi_sci
+            
+            osnr = 10 * np.log10(launch_power / (power_ase + power_sci))
+
+            result[rate][modulation.name] = osnr
+            max_osnr = max(max_osnr, osnr)
+
+    return max_osnr, result
+    
+

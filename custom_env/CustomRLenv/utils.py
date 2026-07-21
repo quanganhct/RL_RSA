@@ -303,6 +303,11 @@ def get_topology(file_name, topology_name, k_paths=5, undirected_file=True, sndf
         topology = read_txt_file(file_name, undirected_file=undirected_file)
     else:
         topology = read_sndlib_txt_file(file_name)
+
+    view = topology.edges.data('length')
+    lengths = [l for _, _, l in view]
+    max_link_length = max(lengths)
+
     idp = 0
     num_path = 0
 
@@ -341,10 +346,21 @@ def get_topology(file_name, topology_name, k_paths=5, undirected_file=True, sndf
                     idp += 1
                 k_shortest_paths[n1, n2] = objs
                 k_shortest_paths[n2, n1] = objs
+
+    for idn1, n1 in enumerate(topology.nodes()):
+        for idn2, n2 in enumerate(topology.nodes()):
+            if idn1 < idn2:
+                p: Path
+                for p in k_shortest_paths[n1, n2]:
+                    p.normalized_length = float(p.length / (max_hop * max_link_length))
+                    p.normalized_num_hops = float(p.hops / max_hop)
+
+
     topology.graph["name"] = topology_name
     topology.graph["ksp"] = k_shortest_paths
     topology.graph["max_numpath"] = num_path
     topology.graph["max_hop"] = max_hop
+    topology.graph["max_link_length"] = max_link_length
     if modulations is not None:
         topology.graph["modulations"] = modulations
     topology.graph["k_paths"] = k_paths
