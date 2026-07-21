@@ -57,6 +57,7 @@ class Service:
     bandwidth: Optional[float] = field(default=None)
     nli_inf_from: Optional[dict] = field(default=None)
     ase_inf: Optional[float] = field(default=None)
+    return_code: Optional[int] = field(default=None)
 
     def __str__(self):
         msg = "{"

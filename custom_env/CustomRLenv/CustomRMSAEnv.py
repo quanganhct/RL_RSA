@@ -15,7 +15,8 @@ from typing import List
 
 from custom_env.CustomRLenv.utils import Path, Modulation, Service, spectrum_feature_points, transform_graph
 from env import constant
-from custom_env.CustomRLenv.osnr import compute_ase_nli, compute_min_gap_osnr, compute_max_osnr
+from custom_env.CustomRLenv.osnr import compute_ase_nli, compute_min_gap_osnr, compute_max_osnr, check_osnr_constraint_of_running_requests
+from custom_env.CustomRLenv.return_code import FailedCode
 
 class CustomRMSAEnv(RMSAEnv):
     """
@@ -510,6 +511,7 @@ class CustomRMSAEnv(RMSAEnv):
         numerator = np.dot(val, np.floor(length/float(nbslots))).flatten()[0]
         denominator = np.floor(np.dot(val, length).flatten()/float(nbslots))[0]
         return float(numerator) / float(denominator) if denominator != 0 else 0
+    
 
     # def compute_abp_component(self):
     #     abp = 0
@@ -624,45 +626,53 @@ class CustomRMSAEnv(RMSAEnv):
                     #TODO make this work I am using 0,0,0 to check the code
                     osnr, ase, nli = compute_ase_nli(self, self.current_service)
                     if osnr >= selected_path.current_modulation.minimum_osnr + constant.osnr_margin:
+                        if check_osnr_constraint_of_running_requests(self, self.current_service):
 
-                        self._provision_path(
-                            self.k_shortest_paths[src, dest][self.selected_path_id],
-                            self.selected_slot_id,
-                            slots,
-                        )
-                        # self.current_service.center_frequency = constant.frequency_start \
-                        #     + constant.frequency_slot_bandwidth * initial_slot \
-                        #     + constant.frequency_slot_bandwidth * (slots / 2.0)
-                        
-                        # self.current_service.bandwidth = constant.frequency_slot_bandwidth * slots
+                            self._provision_path(
+                                self.k_shortest_paths[src, dest][self.selected_path_id],
+                                self.selected_slot_id,
+                                slots,
+                            )
+                            # self.current_service.center_frequency = constant.frequency_start \
+                            #     + constant.frequency_slot_bandwidth * initial_slot \
+                            #     + constant.frequency_slot_bandwidth * (slots / 2.0)
+                            
+                            # self.current_service.bandwidth = constant.frequency_slot_bandwidth * slots
 
-                        # bandwidth in GHz
-                        self.granted_bandwidth += self.current_service.bandwidth / 1e9
-                        self.granted_bitrate += self.current_service.bit_rate
-                        self.total_spectrum_usage += float(slots * (len(selected_path.node_list) - 1) / (self.num_spectrum_resources * self.num_edges))
+                            # bandwidth in GHz
+                            self.granted_bandwidth += self.current_service.bandwidth / 1e9
+                            self.granted_bitrate += self.current_service.bit_rate
+                            self.total_spectrum_usage += float(slots * (len(selected_path.node_list) - 1) / (self.num_spectrum_resources * self.num_edges))
 
-                        self.current_service.accepted = True
-                        self.actions_taken[self.selected_path_id, self.selected_slot_id] += 1
-                        if (
-                            self.bit_rate_selection == "discrete"
-                        ):  # if discrete bit rate is being used
-                            self.slots_provisioned_histogram[
-                                slots
-                            ] += 1  # populate the histogram of bit rates
-                        self._add_release(self.current_service)
+                            self.current_service.accepted = True
+                            self.actions_taken[self.selected_path_id, self.selected_slot_id] += 1
+                            if (
+                                self.bit_rate_selection == "discrete"
+                            ):  # if discrete bit rate is being used
+                                self.slots_provisioned_histogram[
+                                    slots
+                                ] += 1  # populate the histogram of bit rates
+                            self._add_release(self.current_service)
+                            self.current_service.return_code = FailedCode.SUCCESS
+                        else:
+                            self.current_service.return_code = FailedCode.PREV_OSNR
                     else:
                         self.logger.debug("{} Processing fail because of OSNR: {} vs threshold: {}".format(
                                             self.current_service.service_id, osnr, selected_path.current_modulation.minimum_osnr + constant.osnr_margin))
                         self.current_service.accepted = False
+                        self.current_service.return_code = FailedCode.OSNR
                 else:
                     self.logger.debug("{} Processing fail to allocate slots".format(
                                     self.current_service.service_id))
+                    self.current_service.return_code = FailedCode.FREQ_SLOT
             else:
                 self.logger.debug("{} Processing fail to select modulation".format(
                                     self.current_service.service_id))
+                self.current_service.return_code = FailedCode.MODULATION
         else:
             self.logger.debug("{} Processing fail to select path".format(
                                     self.current_service.service_id))
+            self.current_service.return_code = FailedCode.PATH
             
 
         if not self.current_service.accepted:
@@ -736,7 +746,8 @@ class CustomRMSAEnv(RMSAEnv):
             "num_total_request": self.num_generated_service,
             "spectrum_efficiency": float(self.granted_bitrate / self.granted_bandwidth),
             "spectrum_usage_over_time": float(self.total_spectrum_usage / self.num_generated_service),
-            "network_abp_fragmentation": self.compute_network_fragmentation_abp()
+            "network_abp_fragmentation": self.compute_network_fragmentation_abp(),
+            "return_code": self.current_service.return_code
         }
         
         if self.bit_rate_selection == "discrete":

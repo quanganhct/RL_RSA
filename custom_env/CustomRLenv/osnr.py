@@ -142,6 +142,9 @@ def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=T
 
             for service in env.topology[src][dst]["running_services"]:
                 if service.service_id != current_service.service_id:
+                    if update_old_service and current_service.service_id not in service.nli_inf_from:
+                        service.nli_inf_from[current_service.service_id] = 0
+
                     d_frequency = abs(service.center_frequency - current_service.center_frequency)
 
                     phi_xci = asinh(
@@ -186,6 +189,7 @@ def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=T
                                     (service.launch_power / service.bandwidth) ** 3 * \
                                     nli_coef + phi_xci * service.bandwidth
 
+    # Compute the nli from only running service. The name @current_service may not be the new generated service
     list_running_service = env.topology.graph["running_services"]
     set_running_service_idx = set([s.service_id for s in list_running_service])
     sid_set = set_running_service_idx.intersection(current_service.nli_inf_from.keys())
@@ -203,6 +207,31 @@ def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=T
     nli = 10 * np.log10(1 / nli)
 
     return osnr, ase, nli
+
+'''
+Check OSNR constraints of running service, with the new service (not provisioned yet) is @new_service
+'''
+def check_osnr_constraint_of_running_requests(env: RMSAEnv, new_service: Service):
+    set_shared_link_service = set()
+    for i in range(len(new_service.path.node_list)-1):
+        src, dst = new_service.path.node_list[i], new_service.path.node_list[i+1]
+        set_shared_link_service.update(env.topology[src][dst]["running_services"])
+
+    running_service_id = set([service.service_id for service in env.topology.graph["running_services"]])
+
+    service:Service
+    for service in set_shared_link_service:
+        sid_set = running_service_id.intersection(service.nli_inf_from.keys())
+        sid_set.add(new_service.service_id)
+
+        power_nli = sum([service.nli_inf_from[sid] for sid in sid_set])
+        osnr = 10 * np.log10(service.launch_power / (power_nli + service.ase_inf))
+
+        if osnr < service.path.current_modulation.minimum_osnr:
+            return False
+    
+    return True
+
 
 # Return min osnr gap of all services that shared link with @path, together with service_id
 def compute_min_gap_osnr(env: RMSAEnv, new_service: Service, path: Path, modulation: Modulation, \
