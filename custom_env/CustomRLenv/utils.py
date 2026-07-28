@@ -274,9 +274,7 @@ def get_precomputed_path(G, source, target, k=5, alpha=2, weight='weight'):
 def get_path_weight(graph, path, weight="length"):
     return np.sum([graph[path[i]][path[i + 1]][weight] for i in range(len(path) - 1)])
 
-def get_best_modulation_format(
-    length: float, modulations: Sequence[Modulation]
-) -> Modulation:
+def get_best_modulation_format(length: float, modulations: Sequence[Modulation]) -> Modulation:
     # sorts modulation from the most to the least spectrally efficient
     sorted_modulations = sorted(
         modulations, key=lambda x: x.spectral_efficiency, reverse=True

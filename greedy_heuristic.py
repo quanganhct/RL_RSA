@@ -6,7 +6,8 @@ from env import constant
 from DRL.utils.logging import Logger
 from DRL.utils.csv_writer import CSVWriter
 from custom_env.CustomRLenv.utils import Path, Modulation, Service, compute_number_of_slots
-from custom_env.CustomRLenv.osnr import compute_ase_nli
+from custom_env.CustomRLenv.osnr import compute_ase_nli, check_osnr_constraint_of_running_requests
+from custom_env.CustomRLenv.return_code import FailedCode
 
 import datetime
 import numpy as np
@@ -17,6 +18,7 @@ def first_fit_heuristic(env:CustomRMSAEnv, request:Service):
     src, dst = request.source, request.destination
     paths:Collection[Path] = env.k_shortest_paths[src, dst]
     request.accepted = False
+    request.failed_gap = None
 
     for p in range(len(paths)):
         path = paths[p]
@@ -44,12 +46,30 @@ def first_fit_heuristic(env:CustomRMSAEnv, request:Service):
                 request.bandwidth = constant.frequency_slot_bandwidth * slots
                 request.launch_power = env.launch_power
 
-                osnr, ase, nli = compute_ase_nli(env, request)
+                osnr, ase, nli = compute_ase_nli(env, request, debug=False)
+                request.failed_gap = osnr - (path.current_modulation.minimum_osnr + constant.osnr_margin)
                 if osnr >= path.current_modulation.minimum_osnr + constant.osnr_margin:
-                    env._provision_path(path, initial_slot, slots)
-                    request.accepted = True
-                    env._add_release(request)
-                    break
+                    check, request.failed_gap, sid_set, dict_nli = check_osnr_constraint_of_running_requests(env, request)
+                    if check:
+                    # if True:
+                        env._provision_path(path, initial_slot, slots)
+                        request.accepted = True
+                        request.return_code = FailedCode.SUCCESS
+                        env._add_release(request)
+                        break
+                    else:
+                        request.return_code = FailedCode.PREV_OSNR
+                        # print(sid_set)
+                        # print(dict_nli)
+                else:
+                    request.return_code = FailedCode.OSNR
+                    
+                
+                if not request.accepted:
+                    request.nli_inf_from = None
+                    request.ase_inf = None
+                    if request.return_code == FailedCode.PREV_OSNR:
+                        print(request.return_code, request.failed_gap)
 
             if request.accepted:
                 break
@@ -146,6 +166,14 @@ def first_fit_heuristic_modulation_first(env:CustomRMSAEnv, request:Service):
         if request.accepted:
             break
             
+def random_fit(env:CustomRMSAEnv, request:Service):
+    src, dst = request.source, request.destination
+    paths:Collection[Path] = env.k_shortest_paths[src, dst]
+    request.accepted = False
+
+    # for path in paths:
+
+
 
 def greedy_algorithm(env:CustomRMSAEnv, iteration):
     env._new_service = False
@@ -156,6 +184,7 @@ def greedy_algorithm(env:CustomRMSAEnv, iteration):
         first_fit_heuristic(env, env.current_service)
         # first_fit_best_modulation_heuristic(env, env.current_service)
         # first_fit_heuristic_modulation_first(env, env.current_service)
+        print(env.current_service.return_code, env.current_service.failed_gap)
         if env.current_service.accepted:
             accepted_count += 1
         env._new_service = False
@@ -176,6 +205,7 @@ writer.write(['topology_name', 'load', 'num_request', 'accepted', 'service_block
 
 topology_data = [dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True)]
 loads = [80, 200, 500]
+loads = [200]
 
 for arg in topology_data:
     topology = get_topology(**arg, alpha=1)
@@ -207,7 +237,7 @@ for arg in topology_data:
         env.logger=logger
         
         print("Run Greedy Heuristic")
-        for i in range(3):
+        for i in range(1):
             # print("Iteration", i)
             nbaccepted = greedy_algorithm(env, i)
             sbr = float(EPISODE_LENGTH - nbaccepted)/EPISODE_LENGTH

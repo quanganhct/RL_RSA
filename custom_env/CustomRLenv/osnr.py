@@ -79,8 +79,18 @@ def eval_osnr(env: RMSAEnv, current_service: Service):
     nli = 10 * np.log10(1 / acc_nli)
     return gsnr, ase, nli
 
+def eval_osnr_in_dark_fiber(service:Service, length: float, modulation: Modulation):
+    beta_2: float = -21.3e-27  
+    gamma: float = 1.3e-3  
+    h_plank: float = 6.626e-34  
+    attenuation_normalized = constant.attenuation_db_km / (2 * 10 * np.log10(np.exp(1)) * 1e3)
+    l_eff = (1 - np.exp(-2 * attenuation_normalized * constant.fiber_span * 1e3)) / (2 * attenuation_normalized)
+
+    nb_span = ceil(length / constant.fiber_span)
+
+
 # Compute OSNR and writing OSNR factor into env for the purpose of recomputing later
-def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=True):
+def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=True, debug=False):
     # if not current_service.accepted and current_service not in env.topology.graph["running_services"]:
     #     return None, None, None
     
@@ -124,6 +134,7 @@ def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=T
     # power_ase = nb_span * h_plank * current_service.center_frequency * \
     #         (exp(2 * attenuation_nor malized * constant.fiber_span * 1e3) - 1) * noise_figure_normalized
 
+    other_service_first_time = set()
     if firstime:
         phi_sci = asinh(pi ** 2 * abs(beta_2) * (current_service.bandwidth) ** 2 / \
                             (4 * attenuation_normalized))
@@ -142,6 +153,10 @@ def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=T
 
             for service in env.topology[src][dst]["running_services"]:
                 if service.service_id != current_service.service_id:
+
+                    if debug and current_service.service_id == 7:
+                        print("Compute ASE NLI", current_service.service_id, service.service_id)
+
                     if update_old_service and current_service.service_id not in service.nli_inf_from:
                         service.nli_inf_from[current_service.service_id] = 0
 
@@ -185,9 +200,13 @@ def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=T
                                 abs(d_frequency - current_service.bandwidth/2))
                     
                     if update_old_service and service.nli_inf_from is not None and current_service.service_id in service.nli_inf_from:
+                        if service.service_id not in other_service_first_time:
+                            service.nli_inf_from[current_service.service_id] = 0
+                            other_service_first_time.add(service.service_id)
+
                         service.nli_inf_from[current_service.service_id] += nb_span * \
                                     (service.launch_power / service.bandwidth) ** 3 * \
-                                    nli_coef + phi_xci * service.bandwidth
+                                    nli_coef * phi_xci * service.bandwidth
 
     # Compute the nli from only running service. The name @current_service may not be the new generated service
     list_running_service = env.topology.graph["running_services"]
@@ -205,32 +224,43 @@ def compute_ase_nli(env: RMSAEnv, current_service: Service, update_old_service=T
     osnr = 10 * np.log10(1 / osnr)
     ase = 10 * np.log10(1 / ase)
     nli = 10 * np.log10(1 / nli)
-
     return osnr, ase, nli
 
 '''
 Check OSNR constraints of running service, with the new service (not provisioned yet) is @new_service
 '''
 def check_osnr_constraint_of_running_requests(env: RMSAEnv, new_service: Service):
-    set_shared_link_service = set()
+    set_shared_link_service_id = set()
+    shared_link_service = dict()
     for i in range(len(new_service.path.node_list)-1):
         src, dst = new_service.path.node_list[i], new_service.path.node_list[i+1]
-        set_shared_link_service.update(env.topology[src][dst]["running_services"])
+        list_service:List[Service] = env.topology[src][dst]["running_services"]
+        shared_link_service.update([(service.service_id, service) for service in list_service])
+        set_shared_link_service_id.update([s.service_id for s in list_service])
 
     running_service_id = set([service.service_id for service in env.topology.graph["running_services"]])
-
     service:Service
-    for service in set_shared_link_service:
+    for service_id in set_shared_link_service_id:
+        service = shared_link_service[service_id]
         sid_set = running_service_id.intersection(service.nli_inf_from.keys())
         sid_set.add(new_service.service_id)
 
-        power_nli = sum([service.nli_inf_from[sid] for sid in sid_set])
+        try:
+            power_nli = sum([service.nli_inf_from[sid] for sid in sid_set])
+        except Exception as e:
+            print("New Service Id:", new_service.service_id)
+            print("Check Service:", service_id)
+            print("Shared Link Service:", set_shared_link_service_id)
+            print("New Service", new_service.path.node_list)
+            print("Service:", service.path.node_list)
+            raise e
+        
         osnr = 10 * np.log10(service.launch_power / (power_nli + service.ase_inf))
 
         if osnr < service.path.current_modulation.minimum_osnr:
-            return False
+            return False, osnr, sid_set, service.nli_inf_from
     
-    return True
+    return True, None, None, None
 
 
 # Return min osnr gap of all services that shared link with @path, together with service_id
