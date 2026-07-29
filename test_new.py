@@ -67,10 +67,10 @@ HIDDEN_DIM = 128
 # ENVIRONMENT
 # ============================================================
 
-topology_data = [dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True),\
-                 dict(file_name='./data/european/european.txt', topology_name='European', sndformat=False, undirected_file=False),\
-                 dict(file_name='./data/nsf/nsfnet_chen.txt', topology_name='NSF', sndformat=False, undirected_file=True),\
-                 dict(file_name='./data/usa/backbone.txt', topology_name='USA', sndformat=False, undirected_file=False)]
+topology_data = [dict(file_name='./data/usa/backbone.txt', topology_name='USA', sndformat=False, undirected_file=False),
+                 dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True),
+                 dict(file_name='./data/european/european.txt', topology_name='European', sndformat=False, undirected_file=False),
+                 dict(file_name='./data/nsf/nsfnet_chen.txt', topology_name='NSF', sndformat=False, undirected_file=True)]
 
 loads = [80, 100, 200, 300, 500]
 
@@ -148,7 +148,7 @@ for arg in topology_data:
             hidden_dim=HIDDEN_DIM
         ).to(DEVICE)
         
-        chekpoint = torch.load('checkpoint_iter_12_rate_0.07692307692307693.pt', weights_only=True)
+        chekpoint = torch.load('checkpoint_iter_30_rate_0.12903225806451613.pt', weights_only=True)
         policy.load_state_dict(chekpoint['model_state_dict'])
         # ============================================================
         # PPO COMPONENTS
@@ -194,6 +194,7 @@ for arg in topology_data:
         determistic = True
         best_rate = 2
         for iteration in range(NUM_ITERATIONS):
+            print(f"iteration: {iteration} on going topology: {arg['topology_name']} load: {load}")
             
             buffer.clear()
         
@@ -262,7 +263,7 @@ for arg in topology_data:
                           rollout_info['avg_link_utilization'][-1]])
            
             
-            print(rollout_info['done']) 
+            # print(rollout_info['done']) 
         
             # print(
             #     f"[Iter {iteration:04d}] "

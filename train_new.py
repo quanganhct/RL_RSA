@@ -284,16 +284,16 @@ for iteration in range(NUM_ITERATIONS):
     else:
         determistic = False
         
-    if iteration % 5 == 0:
-        checkpoint = {
-            "iteration": iteration,
-            "model_state_dict": policy.state_dict(),
-            "optimizer_state_dict": trainer.optimizer.state_dict()
-        }
+    # if iteration % 5 == 0:
+    #     checkpoint = {
+    #         "iteration": iteration,
+    #         "model_state_dict": policy.state_dict(),
+    #         "optimizer_state_dict": trainer.optimizer.state_dict()
+    #     }
 
-        torch.save(checkpoint, f"checkpoint_iter_{iteration}_rate_{new_rate}.pt")
+    #     torch.save(checkpoint, f"checkpoint_iter_{iteration}_rate_{new_rate}.pt")
 
-        print(f"Checkpoint saved at iteration {iteration}")
+    #     print(f"Checkpoint saved at iteration {iteration}")
 
 logger.logger_close()
 print("\nTraining complete.\n")
