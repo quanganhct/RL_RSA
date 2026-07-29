@@ -63,8 +63,9 @@ class CustomRMSAEnv(RMSAEnv):
         self.max_bitrate = max(self.bit_rates)
         self.max_osnr, _ = compute_max_osnr(self.launch_power, self.bit_rates)
         self.granted_bitrate = 0
-        self.granted_bandwidth = 0
+        self.granted_bandwidth = 1e-9
         self.total_spectrum_usage = 0
+        self.count_violating_prev_osnr = 0
 
     def compute_granularity(self):
         granularity = []
@@ -565,7 +566,7 @@ class CustomRMSAEnv(RMSAEnv):
     # -----------------------------
     # Custom step to update features
     # -----------------------------
-    def step(self, selected_slot):
+    def step(self, selected_slot, test=False):
         self.logger.debug(
             "{} Processing path {} on initial slot {} for {} slots".format(
                 self.current_service.service_id,
@@ -626,36 +627,37 @@ class CustomRMSAEnv(RMSAEnv):
                     #TODO make this work I am using 0,0,0 to check the code
                     osnr, ase, nli = compute_ase_nli(self, self.current_service)
                     if osnr >= selected_path.current_modulation.minimum_osnr + constant.osnr_margin:
-                        if check_osnr_constraint_of_running_requests(self, self.current_service):
+                        if test and check_osnr_constraint_of_running_requests(self, self.current_service):
+                            self.count_violating_prev_osnr += 1
 
-                            self._provision_path(
-                                self.k_shortest_paths[src, dest][self.selected_path_id],
-                                self.selected_slot_id,
-                                slots,
-                            )
-                            # self.current_service.center_frequency = constant.frequency_start \
-                            #     + constant.frequency_slot_bandwidth * initial_slot \
-                            #     + constant.frequency_slot_bandwidth * (slots / 2.0)
-                            
-                            # self.current_service.bandwidth = constant.frequency_slot_bandwidth * slots
+                        self._provision_path(
+                            self.k_shortest_paths[src, dest][self.selected_path_id],
+                            self.selected_slot_id,
+                            slots,
+                        )
+                        # self.current_service.center_frequency = constant.frequency_start \
+                        #     + constant.frequency_slot_bandwidth * initial_slot \
+                        #     + constant.frequency_slot_bandwidth * (slots / 2.0)
+                        
+                        # self.current_service.bandwidth = constant.frequency_slot_bandwidth * slots
 
-                            # bandwidth in GHz
-                            self.granted_bandwidth += self.current_service.bandwidth / 1e9
-                            self.granted_bitrate += self.current_service.bit_rate
-                            self.total_spectrum_usage += float(slots * (len(selected_path.node_list) - 1) / (self.num_spectrum_resources * self.num_edges))
+                        # bandwidth in GHz
+                        self.granted_bandwidth += self.current_service.bandwidth / 1e9
+                        self.granted_bitrate += self.current_service.bit_rate
+                        self.total_spectrum_usage += float(slots * (len(selected_path.node_list) - 1) / (self.num_spectrum_resources * self.num_edges))
 
-                            self.current_service.accepted = True
-                            self.actions_taken[self.selected_path_id, self.selected_slot_id] += 1
-                            if (
-                                self.bit_rate_selection == "discrete"
-                            ):  # if discrete bit rate is being used
-                                self.slots_provisioned_histogram[
-                                    slots
-                                ] += 1  # populate the histogram of bit rates
-                            self._add_release(self.current_service)
-                            self.current_service.return_code = FailedCode.SUCCESS
-                        else:
-                            self.current_service.return_code = FailedCode.PREV_OSNR
+                        self.current_service.accepted = True
+                        self.actions_taken[self.selected_path_id, self.selected_slot_id] += 1
+                        if (
+                            self.bit_rate_selection == "discrete"
+                        ):  # if discrete bit rate is being used
+                            self.slots_provisioned_histogram[
+                                slots
+                            ] += 1  # populate the histogram of bit rates
+                        self._add_release(self.current_service)
+                        self.current_service.return_code = FailedCode.SUCCESS
+                        # else:
+                        #     self.current_service.return_code = FailedCode.PREV_OSNR
                     else:
                         self.logger.debug("{} Processing fail because of OSNR: {} vs threshold: {}".format(
                                             self.current_service.service_id, osnr, selected_path.current_modulation.minimum_osnr + constant.osnr_margin))
@@ -749,6 +751,9 @@ class CustomRMSAEnv(RMSAEnv):
             "network_abp_fragmentation": self.compute_network_fragmentation_abp(),
             "return_code": self.current_service.return_code
         }
+
+        if test:
+            info["count_violating_prev_osnr"] = self.count_violating_prev_osnr
         
         if self.bit_rate_selection == "discrete":
             for bit_rate, blocking in blocking_per_bit_rate.items():
@@ -1155,9 +1160,10 @@ class CustomRMSAEnv(RMSAEnv):
         self.selected_slot_id =  None
         self.accepted_service = 0
         self.num_generated_service = 0
-        self.granted_bandwidth = 0
+        self.granted_bandwidth = 1e-9
         self.granted_bitrate = 0
         self.total_spectrum_usage = 0
+        self.count_violating_prev_osnr = 0
        
         obs = super().reset(only_episode_counters)
         
