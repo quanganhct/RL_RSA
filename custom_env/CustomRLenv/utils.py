@@ -66,27 +66,34 @@ modulations = (
         maximum_length=100_000,
         spectral_efficiency=1,
         minimum_osnr=12.6,
+        # minimum_osnr=5.46,
         inband_xt=-14,
     ),
     Modulation(
         name="QPSK",
-        maximum_length=2_000,
+        # maximum_length=2_000,
+        maximum_length=2500,
         spectral_efficiency=2,
-        minimum_osnr=15.5,
+        minimum_osnr=12.6,
+        # minimum_osnr=8.47,
         inband_xt=-17,
     ),
     Modulation(
         name="8QAM",
-        maximum_length=1_000,
+        # maximum_length=1_000,
+        maximum_length=1250,
         spectral_efficiency=3,
         minimum_osnr=18.6,
+        # minimum_osnr=12.49,
         inband_xt=-20,
     ),
     Modulation(
         name="16QAM",
-        maximum_length=500,
+        # maximum_length=500,
+        maximum_length=625,
         spectral_efficiency=4,
         minimum_osnr=22.4,
+        # minimum_osnr=15.13,
         inband_xt=-23,
     ),
     Modulation(
@@ -267,9 +274,7 @@ def get_precomputed_path(G, source, target, k=5, alpha=2, weight='weight'):
 def get_path_weight(graph, path, weight="length"):
     return np.sum([graph[path[i]][path[i + 1]][weight] for i in range(len(path) - 1)])
 
-def get_best_modulation_format(
-    length: float, modulations: Sequence[Modulation]
-) -> Modulation:
+def get_best_modulation_format(length: float, modulations: Sequence[Modulation]) -> Modulation:
     # sorts modulation from the most to the least spectrally efficient
     sorted_modulations = sorted(
         modulations, key=lambda x: x.spectral_efficiency, reverse=True
@@ -296,6 +301,11 @@ def get_topology(file_name, topology_name, k_paths=5, undirected_file=True, sndf
         topology = read_txt_file(file_name, undirected_file=undirected_file)
     else:
         topology = read_sndlib_txt_file(file_name)
+
+    view = topology.edges.data('length')
+    lengths = [l for _, _, l in view]
+    max_link_length = max(lengths)
+
     idp = 0
     num_path = 0
 
@@ -334,10 +344,21 @@ def get_topology(file_name, topology_name, k_paths=5, undirected_file=True, sndf
                     idp += 1
                 k_shortest_paths[n1, n2] = objs
                 k_shortest_paths[n2, n1] = objs
+
+    for idn1, n1 in enumerate(topology.nodes()):
+        for idn2, n2 in enumerate(topology.nodes()):
+            if idn1 < idn2:
+                p: Path
+                for p in k_shortest_paths[n1, n2]:
+                    p.normalized_length = float(p.length / (max_hop * max_link_length))
+                    p.normalized_num_hops = float(p.hops / max_hop)
+
+
     topology.graph["name"] = topology_name
     topology.graph["ksp"] = k_shortest_paths
     topology.graph["max_numpath"] = num_path
     topology.graph["max_hop"] = max_hop
+    topology.graph["max_link_length"] = max_link_length
     if modulations is not None:
         topology.graph["modulations"] = modulations
     topology.graph["k_paths"] = k_paths

@@ -15,7 +15,8 @@ from typing import List
 
 from custom_env.CustomRLenv.utils import Path, Modulation, Service, spectrum_feature_points, transform_graph
 from env import constant
-from custom_env.CustomRLenv.osnr import compute_ase_nli, compute_min_gap_osnr
+from custom_env.CustomRLenv.osnr import compute_ase_nli, compute_min_gap_osnr, compute_max_osnr, check_osnr_constraint_of_running_requests
+from custom_env.CustomRLenv.return_code import FailedCode
 
 class CustomRMSAEnv(RMSAEnv):
     """
@@ -31,9 +32,11 @@ class CustomRMSAEnv(RMSAEnv):
         # self.graph = self.topology#.to_networkx()
         self.node_degree = dict(self.topology.degree())
         self.num_nodes = self.topology.number_of_nodes()
+        self.num_edges = self.topology.number_of_edges()
+
         self.node_betweenness = nx.betweenness_centrality(self.topology)
         self._update_candidate_paths()
-        self.max_path_len = self.topology.graph['max_hop']
+        self.max_nb_hop = self.topology.graph['max_hop']
         # In case of alpha shortest path, @max_num_path is the maximum path per pair nodes, and it is 
         # k_paths in case of k shortest path
         self.max_num_path = self.topology.graph["max_numpath"]
@@ -47,7 +50,7 @@ class CustomRMSAEnv(RMSAEnv):
         self.list_modulations = list(self.topology.graph["modulations"])
         self.launch_power = 10 ** ((constant.launch_power_dbm - 30) / 10)
         self.granularities = self.compute_granularity()
-
+        self.max_num_request_per_link = math.ceil(self.num_spectrum_resources / min(self.granularities))
         self.generated_req_lifetime = []
         
         self.edge_index =  [tuple(map(int, t)) for t in self.topology.edges()]
@@ -55,7 +58,14 @@ class CustomRMSAEnv(RMSAEnv):
         self.edge_id = {e:i for i, e in enumerate(self.edge_index)}
         self.all_action_masked = False
         self.accepted_service = 0
-        self.all_service = 0
+        self.num_generated_service = 0
+
+        self.max_bitrate = max(self.bit_rates)
+        self.max_osnr, _ = compute_max_osnr(self.launch_power, self.bit_rates)
+        self.granted_bitrate = 0
+        self.granted_bandwidth = 1e-9
+        self.total_spectrum_usage = 0
+        self.count_violating_prev_osnr = 0
 
     def compute_granularity(self):
         granularity = []
@@ -150,7 +160,7 @@ class CustomRMSAEnv(RMSAEnv):
     #TODO: 1. add minimum gap osnr - threshold of the services that shared link with the path
     def get_candidate_path_features(self, path:Path):
         s: Service
-        min_gap = 5
+        min_gap = 1
         shared_services = self.get_running_service_share_links(path)
         running_services = self.topology.graph["running_services"]
         set_running_service_idx = set([s.service_id for s in running_services])
@@ -168,7 +178,7 @@ class CustomRMSAEnv(RMSAEnv):
             osnr = nli + ase
 
             osnr = 10 * np.log10(1 / osnr)
-            gap = osnr - s.path.current_modulation.minimum_osnr
+            gap = (osnr - s.path.current_modulation.minimum_osnr)/(self.max_osnr - s.path.current_modulation.minimum_osnr)
             min_gap = min(min_gap, gap)
 
         return min_gap
@@ -191,7 +201,7 @@ class CustomRMSAEnv(RMSAEnv):
             path_feat = self.get_candidate_path_features(path)
             path_features.append(path_feat)
             
-            pad_path = candidates[path_idx] + [-1] * (self.max_path_len - len(candidates[path_idx]))
+            pad_path = candidates[path_idx] + [-1] * (self.max_nb_hop - len(candidates[path_idx]))
             
             pad_paths.append(pad_path)
         
@@ -274,7 +284,7 @@ class CustomRMSAEnv(RMSAEnv):
     def compute_min_gap_snr_on_link(self, link):
         s:Service
 
-        min_gap = 100
+        min_gap = 1
         list_running_service = self.topology.graph["running_services"]
         set_running_service_idx = set([s.service_id for s in list_running_service])
 
@@ -288,7 +298,7 @@ class CustomRMSAEnv(RMSAEnv):
             osnr = nli + ase
 
             osnr = 10 * np.log10(1 / osnr)
-            gap = osnr - s.path.current_modulation.minimum_osnr
+            gap = (osnr - s.path.current_modulation.minimum_osnr)/(self.max_osnr - s.path.current_modulation.minimum_osnr)
             min_gap = min(min_gap, gap)
         
         return min_gap
@@ -308,6 +318,8 @@ class CustomRMSAEnv(RMSAEnv):
             
             first_slot, val, length = CustomRMSAEnv.rle(s_e)
             max_length_available_block = max(length)
+            #Normalized:
+            max_length_available_block = float(max_length_available_block/self.num_spectrum_resources)
 
             # Physical length
             l_e = self.topology.edges[link]['length']  # km or meters
@@ -317,6 +329,8 @@ class CustomRMSAEnv(RMSAEnv):
             
             # num running services on link
             running_services = len(self.topology.edges[link]['running_services'])  # 
+            # Normalized:
+            running_services = float(running_services / self.max_num_request_per_link)
             
             # num running services on link
             external_fragmentation = self.topology.edges[link]['external_fragmentation']  #
@@ -364,8 +378,8 @@ class CustomRMSAEnv(RMSAEnv):
         
         src, dest = self.current_service.source, self.current_service.destination
         selected_path: Path = self.k_shortest_paths[src, dest][path_idx]
-        path_length = selected_path.length
-        nb_hops = selected_path.hops
+        normalized_length = selected_path.normalized_length
+        normalized_num_hops = selected_path.normalized_num_hops
         frag_score = np.zeros(len(utils.modulations))
         nbslot_array = np.zeros(len(utils.modulations))
 
@@ -386,7 +400,7 @@ class CustomRMSAEnv(RMSAEnv):
             abp = abp / (len(selected_path.node_list)-1)
             frag_score[i] = abp
         
-        path_vec = np.concatenate([[path_length, nb_hops],
+        path_vec = np.concatenate([[normalized_length, normalized_num_hops],
                                   nbslot_array,
                                   frag_score])
         return path_vec
@@ -481,6 +495,14 @@ class CustomRMSAEnv(RMSAEnv):
             numerator += np.dot(val, np.floor(length/float(g))).flatten()[0]
             denominator += np.floor(np.dot(val, length).flatten()/float(g))[0]
         return float(numerator) / float(denominator) if denominator != 0 else 0
+    
+    def compute_network_fragmentation_abp(self):
+        abp = 0
+        for edge in self.topology.edges:
+            eid = self.topology[edge[0]][edge[1]]["id"]
+            abp += self.compute_fragmentation_abp_on_link(eid)
+        
+        return 1 - abp / len(self.topology.edges)
 
     def compute_fragmentation_abp_on_link_for_path_modulation(self, link_id:int, mod:Modulation):
         nbslots = self.get_number_slots_given_modulation(mod)
@@ -490,13 +512,14 @@ class CustomRMSAEnv(RMSAEnv):
         numerator = np.dot(val, np.floor(length/float(nbslots))).flatten()[0]
         denominator = np.floor(np.dot(val, length).flatten()/float(nbslots))[0]
         return float(numerator) / float(denominator) if denominator != 0 else 0
+    
 
-    def compute_fragmentation_abp(self):
-        abp = 0
-        for edge in self.topology.edges:
-            eid = self.topology[edge[0]][edge[1]]["id"]
-            abp += self.compute_fragmentation_abp_on_link(eid)
-        return abp / len(self.topology.edges)
+    # def compute_abp_component(self):
+    #     abp = 0
+    #     for edge in self.topology.edges:
+    #         eid = self.topology[edge[0]][edge[1]]["id"]
+    #         abp += self.compute_fragmentation_abp_on_link(eid)
+    #     return abp / len(self.topology.edges)
 
     def reward(self):
 
@@ -531,7 +554,7 @@ class CustomRMSAEnv(RMSAEnv):
             min_gap = min(min_gap, gap)
 
         # Compute fragmentation rate
-        fr_rate = self.compute_fragmentation_abp()
+        fr_rate = self.compute_abp_component()
 
 
         # Compute normalized bitrate
@@ -543,7 +566,15 @@ class CustomRMSAEnv(RMSAEnv):
     # -----------------------------
     # Custom step to update features
     # -----------------------------
-    def step(self, selected_slot):
+    def step(self, selected_slot, test=False):
+        self.logger.debug(
+            "{} Processing path {} on initial slot {} for {} slots".format(
+                self.current_service.service_id,
+                self.k_shortest_paths[self.current_service.source, self.current_service.destination][self.selected_path_id].node_list,
+                selected_slot,
+                self.get_number_slots(self.k_shortest_paths[self.current_service.source, self.current_service.destination][self.selected_path_id]),
+            )
+        )
         self.selected_slot_id = int(selected_slot)
         
         # print(f'path = {self.selected_path_id} mod = {self.selected_mod_id} slot = {self.selected_slot_id}')
@@ -596,6 +627,8 @@ class CustomRMSAEnv(RMSAEnv):
                     #TODO make this work I am using 0,0,0 to check the code
                     osnr, ase, nli = compute_ase_nli(self, self.current_service)
                     if osnr >= selected_path.current_modulation.minimum_osnr + constant.osnr_margin:
+                        if test and check_osnr_constraint_of_running_requests(self, self.current_service):
+                            self.count_violating_prev_osnr += 1
 
                         self._provision_path(
                             self.k_shortest_paths[src, dest][self.selected_path_id],
@@ -608,6 +641,11 @@ class CustomRMSAEnv(RMSAEnv):
                         
                         # self.current_service.bandwidth = constant.frequency_slot_bandwidth * slots
 
+                        # bandwidth in GHz
+                        self.granted_bandwidth += self.current_service.bandwidth / 1e9
+                        self.granted_bitrate += self.current_service.bit_rate
+                        self.total_spectrum_usage += float(slots * (len(selected_path.node_list) - 1) / (self.num_spectrum_resources * self.num_edges))
+
                         self.current_service.accepted = True
                         self.actions_taken[self.selected_path_id, self.selected_slot_id] += 1
                         if (
@@ -617,8 +655,27 @@ class CustomRMSAEnv(RMSAEnv):
                                 slots
                             ] += 1  # populate the histogram of bit rates
                         self._add_release(self.current_service)
+                        self.current_service.return_code = FailedCode.SUCCESS
+                        # else:
+                        #     self.current_service.return_code = FailedCode.PREV_OSNR
                     else:
+                        self.logger.debug("{} Processing fail because of OSNR: {} vs threshold: {}".format(
+                                            self.current_service.service_id, osnr, selected_path.current_modulation.minimum_osnr + constant.osnr_margin))
                         self.current_service.accepted = False
+                        self.current_service.return_code = FailedCode.OSNR
+                else:
+                    self.logger.debug("{} Processing fail to allocate slots".format(
+                                    self.current_service.service_id))
+                    self.current_service.return_code = FailedCode.FREQ_SLOT
+            else:
+                self.logger.debug("{} Processing fail to select modulation".format(
+                                    self.current_service.service_id))
+                self.current_service.return_code = FailedCode.MODULATION
+        else:
+            self.logger.debug("{} Processing fail to select path".format(
+                                    self.current_service.service_id))
+            self.current_service.return_code = FailedCode.PATH
+            
 
         if not self.current_service.accepted:
             self.actions_taken[self.max_num_path, self.num_spectrum_resources] += 1
@@ -645,7 +702,7 @@ class CustomRMSAEnv(RMSAEnv):
 
         reward = self.reward()
         
-        self.all_service += 1
+        self.num_generated_service += 1
         if self.current_service.accepted:
             self.accepted_service += 1
         self.logger.log_str("ENV Reward %s"%(reward))
@@ -661,9 +718,9 @@ class CustomRMSAEnv(RMSAEnv):
             )
             / self.episode_services_processed,
             "our_service_blocking_rate": (
-                self.all_service - self.accepted_service
+                self.num_generated_service - self.accepted_service
             )
-            / self.all_service,
+            / self.num_generated_service,
             "bit_rate_blocking_rate": (
                 self.bit_rate_requested - self.bit_rate_provisioned
             )
@@ -686,9 +743,17 @@ class CustomRMSAEnv(RMSAEnv):
                     self.topology[lnk[0]][lnk[1]]["utilization"]
                     for lnk in self.topology.edges()
                 ]
-            )
-            
+            ),
+            "num_accepted_request": self.accepted_service,
+            "num_total_request": self.num_generated_service,
+            "spectrum_efficiency": float(self.granted_bitrate / self.granted_bandwidth),
+            "spectrum_usage_over_time": float(self.total_spectrum_usage / self.num_generated_service),
+            "network_abp_fragmentation": self.compute_network_fragmentation_abp(),
+            "return_code": self.current_service.return_code
         }
+
+        if test:
+            info["count_violating_prev_osnr"] = self.count_violating_prev_osnr
         
         if self.bit_rate_selection == "discrete":
             for bit_rate, blocking in blocking_per_bit_rate.items():
@@ -1094,7 +1159,11 @@ class CustomRMSAEnv(RMSAEnv):
         self.selected_mod_id = None
         self.selected_slot_id =  None
         self.accepted_service = 0
-        self.all_service = 0
+        self.num_generated_service = 0
+        self.granted_bandwidth = 1e-9
+        self.granted_bitrate = 0
+        self.total_spectrum_usage = 0
+        self.count_violating_prev_osnr = 0
        
         obs = super().reset(only_episode_counters)
         

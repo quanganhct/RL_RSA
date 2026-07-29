@@ -32,6 +32,8 @@ class Path:
     length: Union[int, float]
     best_modulation: Optional[Modulation] = field(default=None)
     current_modulation: Optional[Modulation] = field(default=None)
+    normalized_length: float = 0
+    normalized_num_hops: float = 0
 
 
 @dataclass(repr=False)
@@ -55,6 +57,7 @@ class Service:
     bandwidth: Optional[float] = field(default=None)
     nli_inf_from: Optional[dict] = field(default=None)
     ase_inf: Optional[float] = field(default=None)
+    return_code: Optional[int] = field(default=None)
 
     def __str__(self):
         msg = "{"

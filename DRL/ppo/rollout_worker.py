@@ -66,6 +66,8 @@ class RolloutWorker:
             "bit_rate_blocking_rate": [],
             "episode_bit_rate_blocking_rate": [],
             "avg_link_utilization": [],
+            'num_accepted_request': [],
+            'num_total_request': [],
             'done': []
         }
 

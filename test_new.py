@@ -36,7 +36,7 @@ random.seed(SEED)
 # ============================================================
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# DEVICE = 'cpu'
+DEVICE = 'cpu'
 print(f"\nUsing device: {DEVICE}\n")
 
 
@@ -45,7 +45,7 @@ print(f"\nUsing device: {DEVICE}\n")
 # ============================================================
 
 LOAD = 80# 300
-EPISODE_LENGTH = 1000
+EPISODE_LENGTH = 10
 MEAN_SERVICE_HOLDING_TIME = 200
 NUM_SPECTRUM_RESOURCES = 380#300
 
@@ -67,12 +67,23 @@ HIDDEN_DIM = 128
 # ENVIRONMENT
 # ============================================================
 
+
 topology_data = [dict(file_name='./data/usa/backbone.txt', topology_name='USA', sndformat=False, undirected_file=False),
                  dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True),
                  dict(file_name='./data/european/european.txt', topology_name='European', sndformat=False, undirected_file=False),
                  dict(file_name='./data/nsf/nsfnet_chen.txt', topology_name='NSF', sndformat=False, undirected_file=True)]
 
-loads = [80, 100, 200, 300, 500]
+# topology_data = [dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True),\
+#                  dict(file_name='./data/european/european.txt', topology_name='European', sndformat=False, undirected_file=False),\
+#                  dict(file_name='./data/nsf/nsfnet_chen.txt', topology_name='NSF', sndformat=False, undirected_file=True),\
+#                  dict(file_name='./data/usa/backbone.txt', topology_name='USA', sndformat=False, undirected_file=False)]
+
+# loads = [80, 100, 200, 300, 500]
+
+# topology_data = [dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True)]
+
+loads = [200]
+
 
 # topology_data = [#dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True),\
 #                   dict(file_name='./data/european/european.txt', topology_name='European', sndformat=False, undirected_file=False),\
@@ -89,6 +100,8 @@ writer.write(['topology_name', 'load', 'Reward', 'service_blocking_rate',
               'bit_rate_blocking_rate',
               'episode_bit_rate_blocking_rate',
               'avg_link_utilization',
+              'num_accepted_request',
+              'num_total_request',
               'done'])
 
 for arg in topology_data:
@@ -260,11 +273,18 @@ for arg in topology_data:
                           rollout_info['our_service_blocking_rate'][-1],
                           rollout_info['bit_rate_blocking_rate'][-1],
                           rollout_info['episode_bit_rate_blocking_rate'][-1],
-                          rollout_info['avg_link_utilization'][-1]])
+                          rollout_info['avg_link_utilization'][-1],
+                          rollout_info['num_accepted_request'][-1],
+                          rollout_info['num_total_request'][-1]])
            
+<<<<<<< HEAD
             
             # print(rollout_info['done']) 
         
+=======
+            # print(rollout_info['num_accepted_request'])
+            # print(rollout_info['num_total_request'])         
+>>>>>>> d8f49b12a50dbd48d53ab855adb12d18b147dd61
             # print(
             #     f"[Iter {iteration:04d}] "
             #     f"Reward={mean_reward:.4f} | "
