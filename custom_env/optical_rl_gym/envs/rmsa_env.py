@@ -573,6 +573,7 @@ class RMSAEnv(OpticalNetworkEnv):
             holding_time=ht,
             bit_rate=bit_rate,
         )
+        self.current_service.nli_inf_from = dict()
         self._new_service = True
 
         self.services_processed += 1

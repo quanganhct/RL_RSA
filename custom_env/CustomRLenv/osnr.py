@@ -568,7 +568,6 @@ def compute_min_gap_osnr_vectorized(env: RMSAEnv, new_service: Service, path: Pa
         list_service_on_link.append([s.service_id for s in list_service])
 
     list_shared_link_service_id = list(set_shared_link_service_id)
-    print("list_shared_link_service_id", list_shared_link_service_id)
     span_array = np.array([ceil(env.topology[src][dst]["length"] / constant.fiber_span) for src, dst in list_link])
     
     #array of eligible center freq
@@ -598,9 +597,10 @@ def compute_min_gap_osnr_vectorized(env: RMSAEnv, new_service: Service, path: Pa
         osnr = 10 * np.log10(1 / osnr)
         gap = osnr - modulation.minimum_osnr
         result = np.zeros(len(spectrum))
-        for i in range(len(eligible_init_slot_index)):
-            index = eligible_init_slot_index[i]
-            result[index] = gap[i]
+        result[eligible_init_slot_index] = gap
+        # for i in range(len(eligible_init_slot_index)):
+        #     index = eligible_init_slot_index[i]
+        #     result[index] = gap[i]
         return result
     else:
         array_link = np.array([[1 if sid in list_service_on_link[lindex] else 0 for lindex in range(len(span_array))] \
@@ -618,7 +618,7 @@ def compute_min_gap_osnr_vectorized(env: RMSAEnv, new_service: Service, path: Pa
                     * np.multiply(np.array([phi_modulation_format[shared_link_service[sid].path.current_modulation.spectral_efficiency - 1] for sid in list_shared_link_service_id]), \
                                   np.divide(shared_service_bandwidth, d_freq))
         
-        # print("NEW S BW", new_service_bandwidth)
+        
         nli_to_current = (env.launch_power / (new_service_bandwidth)) ** 3 * nli_coef * new_service_bandwidth \
                         * np.multiply(total_span, phi_to_current)
 
@@ -645,13 +645,15 @@ def compute_min_gap_osnr_vectorized(env: RMSAEnv, new_service: Service, path: Pa
 
         shared_service_noise_power = _nli_power + _ase_power
 
-        print("shared_service_noise_power", shared_service_noise_power)
+        
         shared_service_noise_power = shared_service_noise_power + nli_from_current
         osnr = 10 * np.log10(env.launch_power / shared_service_noise_power)
         gap2 = osnr - np.array([shared_link_service[sid].path.current_modulation.minimum_osnr for sid in list_shared_link_service_id])   
         # print("GAP2", np.shape(gap2), gap2)
-        result = np.minimum(gap1[:,None], gap2).min(axis=1)
-
-        g = np.column_stack((gap1, gap2))
+        min_gap = np.minimum(gap1[:,None], gap2).min(axis=1)
+        
+        # g = np.column_stack((gap1, gap2))
         # print("GAP", g)
+        result = np.zeros(len(spectrum))
+        result[eligible_init_slot_index] = min_gap
         return result
