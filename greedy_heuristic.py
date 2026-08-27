@@ -19,6 +19,7 @@ def first_fit_heuristic(env:CustomRMSAEnv, request:Service):
     paths:Collection[Path] = env.k_shortest_paths[src, dst]
     request.accepted = False
     request.failed_gap = None
+    violating_prev_osnr = False
 
     for p in range(len(paths)):
         path = paths[p]
@@ -50,17 +51,15 @@ def first_fit_heuristic(env:CustomRMSAEnv, request:Service):
                 request.failed_gap = osnr - (path.current_modulation.minimum_osnr + constant.osnr_margin)
                 if osnr >= path.current_modulation.minimum_osnr + constant.osnr_margin:
                     check, request.failed_gap, sid_set, dict_nli = check_osnr_constraint_of_running_requests(env, request)
-                    if check:
-                    # if True:
-                        env._provision_path(path, initial_slot, slots)
-                        request.accepted = True
-                        request.return_code = FailedCode.SUCCESS
-                        env._add_release(request)
-                        break
-                    else:
-                        request.return_code = FailedCode.PREV_OSNR
-                        # print(sid_set)
-                        # print(dict_nli)
+                    env._provision_path(path, initial_slot, slots)
+                    request.accepted = True
+                    request.return_code = FailedCode.SUCCESS
+                    env._add_release(request)
+
+                    if not check:
+                        violating_prev_osnr = True
+                    break
+                    
                 else:
                     request.return_code = FailedCode.OSNR
                     
@@ -75,6 +74,7 @@ def first_fit_heuristic(env:CustomRMSAEnv, request:Service):
                 break
         if request.accepted:
             break
+    return violating_prev_osnr
 
 def first_fit_best_modulation_heuristic(env:CustomRMSAEnv, request:Service):
     src, dst = request.source, request.destination
@@ -178,10 +178,12 @@ def random_fit(env:CustomRMSAEnv, request:Service):
 def greedy_algorithm(env:CustomRMSAEnv, iteration):
     env._new_service = False
     accepted_count = 0
+    return_val = 0
     for i in range(EPISODE_LENGTH):
         # print("Process request", i)
         env._next_service()
-        first_fit_heuristic(env, env.current_service)
+        val = first_fit_heuristic(env, env.current_service)
+        return_val += 1 if val else 0
         # first_fit_best_modulation_heuristic(env, env.current_service)
         # first_fit_heuristic_modulation_first(env, env.current_service)
         print(env.current_service.return_code, env.current_service.failed_gap)
@@ -190,7 +192,7 @@ def greedy_algorithm(env:CustomRMSAEnv, iteration):
         env._new_service = False
     
     print(f"[Iteration = {iteration}] Total = {EPISODE_LENGTH} | accepted_count = {accepted_count} | blocking_rate = {float(EPISODE_LENGTH-accepted_count)/EPISODE_LENGTH}")
-    return accepted_count
+    return accepted_count, return_val
 
 
 topology_data = [dict(file_name='./data/european/european.txt', topology_name='European', sndformat=False, undirected_file=False),\
@@ -237,12 +239,15 @@ for arg in topology_data:
         env.logger=logger
         
         print("Run Greedy Heuristic")
-        for i in range(1):
+        return_val = []
+        for i in range(2):
             # print("Iteration", i)
-            nbaccepted = greedy_algorithm(env, i)
+            nbaccepted, val = greedy_algorithm(env, i)
+            return_val.append(val)
             sbr = float(EPISODE_LENGTH - nbaccepted)/EPISODE_LENGTH
             writer.write([arg['topology_name'], load, EPISODE_LENGTH, nbaccepted, sbr])
             _ = env.customreset(False)
 
+    print("PREV OSNR violated:", return_val)
 writer.close()
 

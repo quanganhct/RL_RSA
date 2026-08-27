@@ -16,6 +16,7 @@ from typing import List
 from custom_env.CustomRLenv.utils import Path, Modulation, Service, spectrum_feature_points, transform_graph
 from env import constant
 from custom_env.CustomRLenv.osnr import compute_ase_nli, compute_min_gap_osnr, compute_max_osnr, check_osnr_constraint_of_running_requests
+from custom_env.CustomRLenv.osnr import compute_ase_nli_vectorized, compute_min_gap_osnr_vectorized
 from custom_env.CustomRLenv.return_code import FailedCode
 
 class CustomRMSAEnv(RMSAEnv):
@@ -25,9 +26,9 @@ class CustomRMSAEnv(RMSAEnv):
     - Edge features: spectrum occupancy, length, OSNR, NLI, ASE, fragmentation
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, normalized=True, **kwargs):
         super().__init__(*args, **kwargs)
-
+        self.normalized = normalized
         # Precompute static graph properties (degree, betweenness)
         # self.graph = self.topology#.to_networkx()
         self.node_degree = dict(self.topology.degree())
@@ -66,6 +67,7 @@ class CustomRMSAEnv(RMSAEnv):
         self.granted_bandwidth = 1e-9
         self.total_spectrum_usage = 0
         self.count_violating_prev_osnr = 0
+        
 
     def compute_granularity(self):
         granularity = []
@@ -178,7 +180,10 @@ class CustomRMSAEnv(RMSAEnv):
             osnr = nli + ase
 
             osnr = 10 * np.log10(1 / osnr)
-            gap = (osnr - s.path.current_modulation.minimum_osnr)/(self.max_osnr - s.path.current_modulation.minimum_osnr)
+            gap = osnr - s.path.current_modulation.minimum_osnr
+            if self.normalized:
+                gap = gap/(self.max_osnr - s.path.current_modulation.minimum_osnr)
+
             min_gap = min(min_gap, gap)
 
         return min_gap
@@ -298,7 +303,9 @@ class CustomRMSAEnv(RMSAEnv):
             osnr = nli + ase
 
             osnr = 10 * np.log10(1 / osnr)
-            gap = (osnr - s.path.current_modulation.minimum_osnr)/(self.max_osnr - s.path.current_modulation.minimum_osnr)
+            gap = osnr - s.path.current_modulation.minimum_osnr
+            if self.normalized:
+                gap = gap/(self.max_osnr - s.path.current_modulation.minimum_osnr)
             min_gap = min(min_gap, gap)
         
         return min_gap
@@ -317,9 +324,7 @@ class CustomRMSAEnv(RMSAEnv):
             s_e = self.topology.graph["available_slots"][link_id]
             
             first_slot, val, length = CustomRMSAEnv.rle(s_e)
-            max_length_available_block = max(length)
-            #Normalized:
-            max_length_available_block = float(max_length_available_block/self.num_spectrum_resources)
+            max_length_available_block = max(length)            
 
             # Physical length
             l_e = self.topology.edges[link]['length']  # km or meters
@@ -330,7 +335,9 @@ class CustomRMSAEnv(RMSAEnv):
             # num running services on link
             running_services = len(self.topology.edges[link]['running_services'])  # 
             # Normalized:
-            running_services = float(running_services / self.max_num_request_per_link)
+            if self.normalized:
+                max_length_available_block = float(max_length_available_block/self.num_spectrum_resources)
+                running_services = float(running_services / self.max_num_request_per_link)
             
             # num running services on link
             external_fragmentation = self.topology.edges[link]['external_fragmentation']  #
@@ -378,8 +385,13 @@ class CustomRMSAEnv(RMSAEnv):
         
         src, dest = self.current_service.source, self.current_service.destination
         selected_path: Path = self.k_shortest_paths[src, dest][path_idx]
-        normalized_length = selected_path.normalized_length
-        normalized_num_hops = selected_path.normalized_num_hops
+        if self.normalized:
+            length = selected_path.normalized_length
+            num_hops = selected_path.normalized_num_hops
+        else:
+            length = selected_path.length
+            num_hops = len(selected_path.node_list)-1
+
         frag_score = np.zeros(len(utils.modulations))
         nbslot_array = np.zeros(len(utils.modulations))
 
@@ -400,7 +412,7 @@ class CustomRMSAEnv(RMSAEnv):
             abp = abp / (len(selected_path.node_list)-1)
             frag_score[i] = abp
         
-        path_vec = np.concatenate([[normalized_length, normalized_num_hops],
+        path_vec = np.concatenate([[length, num_hops],
                                   nbslot_array,
                                   frag_score])
         return path_vec
@@ -412,28 +424,26 @@ class CustomRMSAEnv(RMSAEnv):
             num_feature = 2  
             return np.zeros([self.num_spectrum_resources, num_feature])
         
-        available_slots = super().get_available_slots(
-                self.k_shortest_paths[self.current_service.source, self.current_service.destination]\
-                    [path_idx])
-        
         selected_path:Path = self.k_shortest_paths[
                         self.current_service.source, self.current_service.destination
                     ][path_idx]
+        available_slots = super().get_available_slots(selected_path)
         modulation:Modulation = self.topology.graph['modulations'][modulation_idx]
         slots = self.get_number_slots_given_modulation(modulation)
         fp = spectrum_feature_points(available_slots, slots)
         
         shared_running_services = self.get_running_service_share_links(selected_path)
         #TODO: min gap (SNR - SNRT) for all the service sharing links with @path_idx on a whole spectrum
-        min_gap = np.zeros(len(fp))
-        for i in range(len(fp) - slots+1):
-            if available_slots[i] == 0 or fp[i] == 0:
-                continue
+        # min_gap = np.zeros(len(fp))
+        # for i in range(len(fp) - slots+1):
+        #     if available_slots[i] == 0 or fp[i] == 0:
+        #         continue
 
-            mgap, sid = compute_min_gap_osnr(self, self.current_service, selected_path, \
-                                             modulation, i, shared_running_services)
-            min_gap[i] = mgap
-        
+        #     mgap, sid = compute_min_gap_osnr(self, self.current_service, selected_path, \
+        #                                      modulation, i, shared_running_services)
+        #     min_gap[i] = mgap
+
+        min_gap = compute_min_gap_osnr_vectorized(self, self.current_service, selected_path, modulation, available_slots)
         fp = np.array(fp) + 1e-9
         min_gap = min_gap + 1e-9
         mod_vec = np.array([fp, min_gap]).T
@@ -625,7 +635,7 @@ class CustomRMSAEnv(RMSAEnv):
                     self.current_service.launch_power = self.launch_power
                     
                     #TODO make this work I am using 0,0,0 to check the code
-                    osnr, ase, nli = compute_ase_nli(self, self.current_service)
+                    osnr, ase, nli = compute_ase_nli_vectorized(self, self.current_service)
                     if osnr >= selected_path.current_modulation.minimum_osnr + constant.osnr_margin:
                         if test and check_osnr_constraint_of_running_requests(self, self.current_service):
                             self.count_violating_prev_osnr += 1

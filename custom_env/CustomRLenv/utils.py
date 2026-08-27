@@ -340,7 +340,7 @@ def get_topology(file_name, topology_name, k_paths=5, undirected_file=True, sndf
                             best_modulation=modulation,
                         )
                     )  # <== The topology is created and a best modulation is just automatically attached.  In our new implementation, the best modulation will be variable depending on available resources and the amount of crosstalk it will cause.
-                    print("\t", objs[-1])
+                    # print("\t", objs[-1])
                     idp += 1
                 k_shortest_paths[n1, n2] = objs
                 k_shortest_paths[n2, n1] = objs
