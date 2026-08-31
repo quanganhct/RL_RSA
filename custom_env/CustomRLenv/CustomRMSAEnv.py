@@ -67,6 +67,7 @@ class CustomRMSAEnv(RMSAEnv):
         self.granted_bandwidth = 1e-9
         self.total_spectrum_usage = 0
         self.count_violating_prev_osnr = 0
+        self.min_gap_osnr_all_slot_vector = None
         
 
     def compute_granularity(self):
@@ -294,21 +295,34 @@ class CustomRMSAEnv(RMSAEnv):
         set_running_service_idx = set([s.service_id for s in list_running_service])
 
         running_service_on_link = self.topology.edges[link]["running_services"]
+        if len(running_service_on_link) == 0:
+            return min_gap
+        power_nli = np.array([sum([v if k in set_running_service_idx else 0 for k, v in s.nli_inf_from.items()]) \
+                              if s.nli_inf_from is not None else 0 for s in running_service_on_link])
+        power_ase = np.array([s.ase_inf for s in running_service_on_link])
+        min_osnr = np.array([s.path.current_modulation.minimum_osnr for s in running_service_on_link])
+        osnr = 10 * np.log10(self.launch_power / (power_nli + power_ase))
+        gap = osnr - min_osnr
+        if self.normalized:
+            gap = gap / (self.max_osnr - min_osnr)
 
-        for s in running_service_on_link:
-            power_nli = sum([s.nli_inf_from[sid] if sid in set_running_service_idx else 0 \
-                             for sid in s.nli_inf_from.keys()])
-            nli = power_nli / s.launch_power
-            ase = s.ase_inf / s.launch_power
-            osnr = nli + ase
-
-            osnr = 10 * np.log10(1 / osnr)
-            gap = osnr - s.path.current_modulation.minimum_osnr
-            if self.normalized:
-                gap = gap/(self.max_osnr - s.path.current_modulation.minimum_osnr)
-            min_gap = min(min_gap, gap)
-        
+        min_gap = min(gap)
         return min_gap
+
+        # for s in running_service_on_link:
+        #     power_nli = sum([s.nli_inf_from[sid] if sid in set_running_service_idx else 0 \
+        #                      for sid in s.nli_inf_from.keys()])
+        #     nli = power_nli / s.launch_power
+        #     ase = s.ase_inf / s.launch_power
+        #     osnr = nli + ase
+
+        #     osnr = 10 * np.log10(1 / osnr)
+        #     gap = osnr - s.path.current_modulation.minimum_osnr
+        #     if self.normalized:
+        #         gap = gap/(self.max_osnr - s.path.current_modulation.minimum_osnr)
+        #     min_gap = min(min_gap, gap)
+        
+        # return min_gap
 
     # -----------------------------
     # Edge feature vector x_e
@@ -444,6 +458,7 @@ class CustomRMSAEnv(RMSAEnv):
         #     min_gap[i] = mgap
 
         min_gap = compute_min_gap_osnr_vectorized(self, self.current_service, selected_path, modulation, available_slots)
+        self.min_gap_osnr_all_slot_vector = min_gap
         fp = np.array(fp) + 1e-9
         min_gap = min_gap + 1e-9
         mod_vec = np.array([fp, min_gap]).T
@@ -637,7 +652,8 @@ class CustomRMSAEnv(RMSAEnv):
                     #TODO make this work I am using 0,0,0 to check the code
                     osnr, ase, nli = compute_ase_nli_vectorized(self, self.current_service)
                     if osnr >= selected_path.current_modulation.minimum_osnr + constant.osnr_margin:
-                        if test and check_osnr_constraint_of_running_requests(self, self.current_service):
+                        # if test and check_osnr_constraint_of_running_requests(self, self.current_service):
+                        if test and self.min_gap_osnr_all_slot_vector is not None and self.min_gap_osnr_all_slot_vector[self.selected_slot_id] <= 0:
                             self.count_violating_prev_osnr += 1
 
                         self._provision_path(
