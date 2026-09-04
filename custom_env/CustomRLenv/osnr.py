@@ -617,9 +617,6 @@ def compute_min_gap_osnr_vectorized(env: RMSAEnv, new_service: Service, path: Pa
 
         shared_service_bandwidth = np.array([shared_link_service[sid].bandwidth for sid in list_shared_link_service_id])
 
-        print("D_FREQ", np.shape(d_freq), d_freq)
-        print("SHARED", np.shape(shared_service_bandwidth), shared_service_bandwidth)
-
         phi_to_current = np.log(abs(d_freq + shared_service_bandwidth/2) / abs(d_freq - shared_service_bandwidth/2)) \
                     - 5 / 3 * (l_eff / (constant.fiber_span * 1e3)) \
                     * np.multiply(np.array([phi_modulation_format[shared_link_service[sid].path.current_modulation.spectral_efficiency - 1] for sid in list_shared_link_service_id]), \
