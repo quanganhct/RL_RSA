@@ -40,7 +40,7 @@ def eval_osnr(env: RMSAEnv, current_service: Service):
 
     l_eff_a = 1 / (2 * attenuation_normalized)
     l_eff = (1 - np.exp(-2 * attenuation_normalized * constant.fiber_span * 1e3)) / (2 * attenuation_normalized)
-    
+    nli_coef = (8 / (27 * pi * abs(beta_2))) * gamma ** 2 * l_eff
 
     for i in range(len(current_service.path.node_list)-1):
         src, dst = current_service.path.node_list[i], current_service.path.node_list[i+1]
@@ -63,9 +63,9 @@ def eval_osnr(env: RMSAEnv, current_service: Service):
                 #         5 / 3 * (l_eff / (constant.fiber_span * 1e3)))
                 sum_phi += phi
 
-        power_nli_span = nb_span * (current_service.launch_power / (current_service.bandwidth)) ** 3 * \
-            (8 / (27 * pi * abs(beta_2))) * gamma ** 2 * l_eff * sum_phi * current_service.bandwidth
-        power_ase = nb_span * current_service.bandwidth * h_plank * current_service.center_frequency * \
+        power_nli_span += nb_span * (current_service.launch_power / (current_service.bandwidth)) ** 3 * \
+            nli_coef * sum_phi * current_service.bandwidth
+        power_ase += nb_span * current_service.bandwidth * h_plank * current_service.center_frequency * \
             (exp(2 * attenuation_normalized * constant.fiber_span * 1e3) - 1) * noise_figure_normalized
 
         # print(current_service.launch_power, power_ase)
@@ -343,7 +343,7 @@ def compute_min_gap_osnr(env: RMSAEnv, new_service: Service, path: Path, modulat
                     
                 new_service_nli_to[service.service_id] += nb_span * \
                             (service.launch_power / service.bandwidth) ** 3 * \
-                            nli_coef + phi_xci * service.bandwidth
+                            nli_coef * phi_xci * service.bandwidth
 
 
     list_running_service = env.topology.graph["running_services"]
@@ -355,6 +355,7 @@ def compute_min_gap_osnr(env: RMSAEnv, new_service: Service, path: Path, modulat
     nli = power_nli / env.launch_power
     ase = ase_power / env.launch_power
     osnr = nli + ase
+    # print("OSNR, NLI, ASE:", osnr, nli, ase)
 
     osnr = 10 * np.log10(1 / osnr)
     ase = 10 * np.log10(1 / ase)
@@ -373,12 +374,14 @@ def compute_min_gap_osnr(env: RMSAEnv, new_service: Service, path: Path, modulat
         ase = service.ase_inf / env.launch_power
         osnr = nli + ase
 
+        # print("OSNR, NLI, ASE:", osnr, nli, ase)
         osnr = 10 * np.log10(1 / osnr)
         ase = 10 * np.log10(1 / ase)
         nli = 10 * np.log10(1 / nli)
 
         result.append((osnr - service.path.current_modulation.minimum_osnr, service.service_id))
-
+    # print("new_service_nli_to", new_service_nli_to)
+    print("Result", result)
     min_gap, sid = min(result, key=lambda x: x[0])
     return min_gap, sid
 
@@ -426,3 +429,231 @@ def compute_max_osnr(launch_power: float, bitrate: list[float], nbspan=1):
     return max_osnr, result
     
 
+def compute_ase_nli_vectorized(env: RMSAEnv, current_service: Service, update_old_service=True, debug=False):
+    # if not current_service.accepted and current_service not in env.topology.graph["running_services"]:
+    #     return None, None, None
+    
+    beta_2: float = -21.3e-27  
+    gamma: float = 1.3e-3  
+    h_plank: float = 6.626e-34  
+    ase: float = 0
+    nli: float = 0
+    l_eff: float = 0
+    phi_modulation_format = np.array((1, 1, 2/3, 17/25, 69/100, 13/21))
+
+    attenuation_normalized = constant.attenuation_db_km / (2 * 10 * np.log10(np.exp(1)) * 1e3)
+    noise_figure_normalized = 10 ** (constant.noise_figure_db / 10)
+
+    l_eff = (1 - np.exp(-2 * attenuation_normalized * constant.fiber_span * 1e3)) / (2 * attenuation_normalized)
+
+    nli_coef = (8 / (27 * pi * abs(beta_2))) * gamma ** 2 * l_eff
+    span_power_ase = current_service.bandwidth * h_plank * current_service.center_frequency * \
+            (exp(2 * attenuation_normalized * constant.fiber_span * 1e3) - 1) * noise_figure_normalized
+    
+    if current_service.nli_inf_from is None or current_service.ase_inf is None:
+        current_service.nli_inf_from = dict()
+        current_service.nli_inf_from[current_service.service_id] = 0
+        current_service.ase_inf = 0
+        
+    set_shared_link_service_id = set()
+    shared_link_service:dict[(int, Service)] = dict()
+    
+    list_link = list()
+    list_service_on_link = list()
+    for i in range(len(current_service.path.node_list)-1):
+        src, dst = current_service.path.node_list[i], current_service.path.node_list[i+1]
+        list_link.append((src, dst))
+        list_service:List[Service] = env.topology[src][dst]["running_services"]
+        shared_link_service.update([(service.service_id, service) for service in list_service])
+        set_shared_link_service_id.update([s.service_id for s in list_service])
+        list_service_on_link.append([s.service_id for s in list_service])
+
+    list_shared_link_service_id = list(set_shared_link_service_id)
+    span_array = np.array([ceil(env.topology[src][dst]["length"] / constant.fiber_span) for src, dst in list_link])
+    current_service.ase_inf = np.sum(span_array) * span_power_ase
+
+    phi_sci = asinh(pi ** 2 * abs(beta_2) * (current_service.bandwidth) ** 2 / \
+                            (4 * attenuation_normalized))
+    
+    current_service.nli_inf_from[current_service.service_id] = np.sum(span_array) * phi_sci * \
+                        (current_service.launch_power / current_service.bandwidth) ** 3 * \
+                                nli_coef * current_service.bandwidth
+    
+    power_nli = current_service.nli_inf_from[current_service.service_id]
+    if len(list_shared_link_service_id) > 0:
+        array_link = np.array([[1 if sid in list_service_on_link[lindex] else 0 for lindex in range(len(span_array))] \
+                    for sid in list_shared_link_service_id])
+        
+        total_span = np.multiply(span_array, array_link)
+        total_span = np.sum(total_span, axis=1)
+
+        d_freq = np.array([abs(shared_link_service[sid].center_frequency - current_service.center_frequency) \
+                for sid in list_shared_link_service_id])
+        shared_service_bandwidth = np.array([shared_link_service[sid].bandwidth for sid in list_shared_link_service_id])
+        phi_to_current = np.log(abs(d_freq + shared_service_bandwidth/2) / abs(d_freq - shared_service_bandwidth/2)) \
+                    - 5 / 3 * (l_eff / (constant.fiber_span * 1e3)) \
+                    * np.multiply(np.array([phi_modulation_format[shared_link_service[sid].path.current_modulation.spectral_efficiency - 1] for sid in list_shared_link_service_id]), \
+                                  np.divide(shared_service_bandwidth, d_freq))
+        
+        nli_to_current = (current_service.launch_power / (current_service.bandwidth)) ** 3 * nli_coef * current_service.bandwidth \
+                        * np.multiply(total_span, phi_to_current)
+                
+        phi_from_current = np.log(abs(d_freq + current_service.bandwidth/2) / abs(d_freq - current_service.bandwidth/2))
+        psd_cube = np.array([(shared_link_service[sid].launch_power/shared_link_service[sid].bandwidth)**3 for sid in list_shared_link_service_id])
+        nli_from_current = nli_coef * np.prod([total_span, psd_cube, phi_from_current, shared_service_bandwidth], axis=0)
+
+        for i in range(len(list_shared_link_service_id)):
+            sid = list_shared_link_service_id[i]
+            shared_link_service[sid].nli_inf_from[current_service.service_id] = nli_from_current[i]
+            current_service.nli_inf_from[sid] = nli_to_current[i]
+
+        power_nli = power_nli + np.sum(nli_to_current)
+
+    
+    nli = power_nli / current_service.launch_power
+    ase = current_service.ase_inf / current_service.launch_power
+    osnr = nli + ase
+
+    # print("P ASE, NLI", ase, nli)
+
+    osnr = 10 * np.log10(1 / osnr)
+    ase = 10 * np.log10(1 / ase)
+    nli = 10 * np.log10(1 / nli)
+    return osnr, ase, nli
+
+def compute_min_gap_osnr_vectorized(env: RMSAEnv, new_service: Service, path: Path, modulation: Modulation, \
+                         spectrum: List[int]):
+    beta_2: float = -21.3e-27  
+    gamma: float = 1.3e-3  
+    h_plank: float = 6.626e-34  
+    ase: float = 0
+    nli: float = 0
+    l_eff_a: float = 0
+    l_eff: float = 0
+    phi_modulation_format = np.array((1, 1, 2/3, 17/25, 69/100, 13/21))
+    service: Service
+
+    nbslots = compute_number_of_slots(new_service.bit_rate, modulation)
+    length = [0 for i in range(len(spectrum))]
+    fea_length = [0 for i in range(len(spectrum))]
+    for i in range(len(spectrum)-1, -1, -1):
+        if i == len(spectrum) - 1:
+            length[i] = 1 if spectrum[i] == 1 else 0
+        else:
+            length[i] = 0 if spectrum[i] == 0 else length[i+1]+1
+
+    fea_length = np.zeros(len(spectrum))
+    fea_length = np.maximum(np.array(length)-nbslots+1, fea_length)
+
+    eligible_init_slot_index = np.argwhere(fea_length).flatten()
+    # print("eligible", eligible_init_slot_index)
+
+    attenuation_normalized = constant.attenuation_db_km / (2 * 10 * np.log10(np.exp(1)) * 1e3)
+    noise_figure_normalized = 10 ** (constant.noise_figure_db / 10)
+
+    l_eff = (1 - np.exp(-2 * attenuation_normalized * constant.fiber_span * 1e3)) / (2 * attenuation_normalized)
+    nli_coef = (8 / (27 * pi * abs(beta_2))) * gamma ** 2 * l_eff
+
+    set_shared_link_service_id = set()
+    shared_link_service:dict[(int, Service)] = dict()
+
+    list_link = list()
+    list_service_on_link = list()
+    for i in range(len(path.node_list)-1):
+        src, dst = path.node_list[i], path.node_list[i+1]
+        list_link.append((src, dst))
+        list_service:List[Service] = env.topology[src][dst]["running_services"]
+        shared_link_service.update([(service.service_id, service) for service in list_service])
+        set_shared_link_service_id.update([s.service_id for s in list_service])
+        list_service_on_link.append([s.service_id for s in list_service])
+
+    list_shared_link_service_id = list(set_shared_link_service_id)
+    span_array = np.array([ceil(env.topology[src][dst]["length"] / constant.fiber_span) for src, dst in list_link])
+    
+    #array of eligible center freq
+    new_service_center_freq = constant.frequency_start \
+                        + constant.frequency_slot_bandwidth * eligible_init_slot_index \
+                        + constant.frequency_slot_bandwidth * (nbslots / 2.0)
+    
+    new_service_bandwidth = constant.frequency_slot_bandwidth * nbslots
+
+    span_power_ase = new_service_bandwidth * h_plank * new_service_center_freq * \
+        (exp(2 * attenuation_normalized * constant.fiber_span * 1e3) - 1) * noise_figure_normalized
+    
+    ase_power = np.sum(span_array) * span_power_ase
+
+    phi_sci = asinh(pi ** 2 * abs(beta_2) * (new_service_bandwidth) ** 2 / \
+                            (4 * attenuation_normalized))
+        
+    sci_power = np.sum(span_array) * phi_sci * \
+                (env.launch_power / new_service_bandwidth) ** 3 * \
+                nli_coef * new_service_bandwidth
+    
+    if len(list_shared_link_service_id) == 0:
+        nli = sci_power / env.launch_power
+        ase = ase_power / env.launch_power
+        osnr = nli + ase
+
+        osnr = 10 * np.log10(1 / osnr)
+        gap = osnr - modulation.minimum_osnr
+        result = np.zeros(len(spectrum))
+        result[eligible_init_slot_index] = gap
+        # for i in range(len(eligible_init_slot_index)):
+        #     index = eligible_init_slot_index[i]
+        #     result[index] = gap[i]
+        return result
+    else:
+        array_link = np.array([[1 if sid in list_service_on_link[lindex] else 0 for lindex in range(len(span_array))] \
+                    for sid in list_shared_link_service_id])
+
+        total_span = np.multiply(span_array, array_link)
+        total_span = np.sum(total_span, axis=1)
+        
+        d_freq = np.array([np.array([abs(shared_link_service[sid].center_frequency - center_freq) \
+                for sid in list_shared_link_service_id]) for center_freq in new_service_center_freq])
+
+        shared_service_bandwidth = np.array([shared_link_service[sid].bandwidth for sid in list_shared_link_service_id])
+        phi_to_current = np.log(abs(d_freq + shared_service_bandwidth/2) / abs(d_freq - shared_service_bandwidth/2)) \
+                    - 5 / 3 * (l_eff / (constant.fiber_span * 1e3)) \
+                    * np.multiply(np.array([phi_modulation_format[shared_link_service[sid].path.current_modulation.spectral_efficiency - 1] for sid in list_shared_link_service_id]), \
+                                  np.divide(shared_service_bandwidth, d_freq))
+        
+        
+        nli_to_current = (env.launch_power / (new_service_bandwidth)) ** 3 * nli_coef * new_service_bandwidth \
+                        * np.multiply(total_span, phi_to_current)
+
+        phi_from_current = np.log(abs(d_freq + new_service_bandwidth/2) / abs(d_freq - new_service_bandwidth/2))
+        psd_cube = np.array([(shared_link_service[sid].launch_power/shared_link_service[sid].bandwidth)**3 for sid in list_shared_link_service_id])
+        prod = np.prod([total_span, psd_cube, shared_service_bandwidth], axis=0)
+        nli_from_current = nli_coef * prod * phi_from_current
+
+        power_current_nli = sci_power + np.sum(nli_to_current, axis=1)
+        nli = power_current_nli / env.launch_power
+        ase = ase_power / env.launch_power
+        osnr = nli + ase
+
+        osnr = 10 * np.log10(1 / osnr)
+        gap1 = osnr - modulation.minimum_osnr
+        # print("GAP1", np.shape(gap1), gap1)
+
+        list_running_service = env.topology.graph["running_services"]
+        set_running_service_idx = set([s.service_id for s in list_running_service])
+
+        _nli_power = np.array([sum([v if k in set_running_service_idx else 0 for k,v in shared_link_service[sid].nli_inf_from.items()]) \
+              if shared_link_service[sid].nli_inf_from is not None else 0 for sid in list_shared_link_service_id])
+        _ase_power = np.array([shared_link_service[sid].ase_inf for sid in list_shared_link_service_id])
+
+        shared_service_noise_power = _nli_power + _ase_power
+
+        
+        shared_service_noise_power = shared_service_noise_power + nli_from_current
+        osnr = 10 * np.log10(env.launch_power / shared_service_noise_power)
+        gap2 = osnr - np.array([shared_link_service[sid].path.current_modulation.minimum_osnr for sid in list_shared_link_service_id])   
+        # print("GAP2", np.shape(gap2), gap2)
+        min_gap = np.minimum(gap1[:,None], gap2).min(axis=1)
+        
+        # g = np.column_stack((gap1, gap2))
+        # print("GAP", g)
+        result = np.zeros(len(spectrum))
+        result[eligible_init_slot_index] = min_gap
+        return result
