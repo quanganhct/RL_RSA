@@ -547,6 +547,8 @@ def compute_min_gap_osnr_vectorized(env: RMSAEnv, new_service: Service, path: Pa
 
     eligible_init_slot_index = np.argwhere(fea_length).flatten()
     # print("eligible", eligible_init_slot_index)
+    if len(eligible_init_slot_index) == 0:
+        return np.zeros(len(spectrum))
 
     attenuation_normalized = constant.attenuation_db_km / (2 * 10 * np.log10(np.exp(1)) * 1e3)
     noise_figure_normalized = 10 ** (constant.noise_figure_db / 10)
@@ -588,6 +590,7 @@ def compute_min_gap_osnr_vectorized(env: RMSAEnv, new_service: Service, path: Pa
     sci_power = np.sum(span_array) * phi_sci * \
                 (env.launch_power / new_service_bandwidth) ** 3 * \
                 nli_coef * new_service_bandwidth
+
     
     if len(list_shared_link_service_id) == 0:
         nli = sci_power / env.launch_power
@@ -613,6 +616,10 @@ def compute_min_gap_osnr_vectorized(env: RMSAEnv, new_service: Service, path: Pa
                 for sid in list_shared_link_service_id]) for center_freq in new_service_center_freq])
 
         shared_service_bandwidth = np.array([shared_link_service[sid].bandwidth for sid in list_shared_link_service_id])
+
+        print("D_FREQ", np.shape(d_freq), d_freq)
+        print("SHARED", np.shape(shared_service_bandwidth), shared_service_bandwidth)
+
         phi_to_current = np.log(abs(d_freq + shared_service_bandwidth/2) / abs(d_freq - shared_service_bandwidth/2)) \
                     - 5 / 3 * (l_eff / (constant.fiber_span * 1e3)) \
                     * np.multiply(np.array([phi_modulation_format[shared_link_service[sid].path.current_modulation.spectral_efficiency - 1] for sid in list_shared_link_service_id]), \
