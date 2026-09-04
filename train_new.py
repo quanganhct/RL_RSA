@@ -1,5 +1,5 @@
 # ============================================================
-# TRAIN.PY — CLEAN PPO PIPELINE FOR RMSA
+# TRAIN.PY â€” CLEAN PPO PIPELINE FOR RMSA
 # ============================================================
 
 import torch
@@ -72,14 +72,14 @@ topology_data = [dict(file_name='./data/germany/sndlib_germany.txt', topology_na
                  dict(file_name='./data/usa/backbone.txt', topology_name='USA', sndformat=False, undirected_file=False)]
 
 
-topology = get_topology(**topology_data[2], alpha=1)
+# topology = get_topology(**topology_data[2], alpha=1)
 
-# topology = get_topology(
-#     './data/germany/sndlib_germany.txt',
-#     'Germany',
-#     sndformat=True,
-#     alpha=1
-# )
+topology = get_topology(
+    './data/germany/sndlib_germany.txt',
+    'Germany',
+    sndformat=True,
+    alpha=1
+)
 
 now = datetime.datetime.now()
 log_filename = now.strftime("%Y-%m-%d_%H-%M-%S")+".txt"
