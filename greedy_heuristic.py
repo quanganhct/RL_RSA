@@ -6,13 +6,30 @@ from env import constant
 from DRL.utils.logging import Logger
 from DRL.utils.csv_writer import CSVWriter
 from custom_env.CustomRLenv.utils import Path, Modulation, Service, compute_number_of_slots
-from custom_env.CustomRLenv.osnr import compute_ase_nli, check_osnr_constraint_of_running_requests
+from custom_env.CustomRLenv.osnr import compute_ase_nli, check_osnr_constraint_of_running_requests, compute_osnr_multiple_position
 from custom_env.CustomRLenv.return_code import FailedCode
 
 import datetime
 import numpy as np
-from typing import Collection
+from typing import Collection, List, Callable
+import random
 
+def get_eligible_init_slot(env: CustomRMSAEnv, path: Path, nbslot: int):
+    spectrum = env.get_available_slots(path)
+    length = [0 for i in range(len(spectrum))]
+    fea_length = [0 for i in range(len(spectrum))]
+    for i in range(len(spectrum)-1, -1, -1):
+        if i == len(spectrum) - 1:
+            length[i] = 1 if spectrum[i] == 1 else 0
+        else:
+            length[i] = 0 if spectrum[i] == 0 else length[i+1]+1
+
+    fea_length = np.zeros(len(spectrum))
+    fea_length = np.maximum(np.array(length)-nbslot+1, fea_length)
+
+    eligible_init_slot_index = np.argwhere(fea_length).flatten()
+    # print(eligible_init_slot_index)
+    return eligible_init_slot_index
 
 def first_fit_heuristic(env:CustomRMSAEnv, request:Service):
     src, dst = request.source, request.destination
@@ -68,7 +85,8 @@ def first_fit_heuristic(env:CustomRMSAEnv, request:Service):
                     request.nli_inf_from = None
                     request.ase_inf = None
                     if request.return_code == FailedCode.PREV_OSNR:
-                        print(request.return_code, request.failed_gap)
+                        # print(request.return_code, request.failed_gap)
+                        pass
 
             if request.accepted:
                 break
@@ -171,30 +189,99 @@ def random_fit(env:CustomRMSAEnv, request:Service):
     paths:Collection[Path] = env.k_shortest_paths[src, dst]
     request.accepted = False
 
-    # for path in paths:
+    for path in paths:
+        mod:Modulation = path.eligible_best_modulation.get(request.bit_rate, None)
+        if request.bit_rate not in path.eligible_best_modulation:
+            raise Exception("Unrecognized bitrate")
+        elif mod is None:
+            break
+
+        path.current_modulation = mod
+        nbslot = compute_number_of_slots(request.bit_rate, mod)
+        init_slots:List[int] = list(get_eligible_init_slot(env, path, nbslot))
+        if len(init_slots) == 0:
+            continue
+
+        while len(init_slots) > 0:
+            initial_slot = random.choice(init_slots)
+            init_slots.remove(initial_slot)
+            request.path = path
+            request.initial_slot = initial_slot
+            request.number_slots = nbslot
+            request.center_frequency = constant.frequency_start \
+                + constant.frequency_slot_bandwidth * initial_slot \
+                + constant.frequency_slot_bandwidth * (nbslot / 2.0)
+            request.bandwidth = constant.frequency_slot_bandwidth * nbslot
+            request.launch_power = env.launch_power
+
+            osnr, ase, nli = compute_ase_nli(env, request)
+            if osnr >= mod.minimum_osnr + constant.osnr_margin:
+                env._provision_path(path, initial_slot, nbslot)
+                request.accepted = True
+                env._add_release(request)
+                break
+
+        if request.accepted:
+            break
+
+def best_fit(env:CustomRMSAEnv, request:Service):
+    src, dst = request.source, request.destination
+    paths:Collection[Path] = env.k_shortest_paths[src, dst]
+    request.accepted = False
+
+    for path in paths:
+        mod:Modulation = path.eligible_best_modulation.get(request.bit_rate, None)
+        if request.bit_rate not in path.eligible_best_modulation:
+            raise Exception("Unrecognized bitrate")
+        elif mod is None:
+            break
+        path.current_modulation = mod
+
+        nbslot = compute_number_of_slots(request.bit_rate, mod)
+        init_slots:List[int] = list(get_eligible_init_slot(env, path, nbslot))
+        if len(init_slots) == 0:
+            continue
+
+        osnr = compute_osnr_multiple_position(env, request, path, mod, init_slots)
+        best_slot_index = np.argmax(osnr)
+        best_osnr = osnr[best_slot_index]
+        if best_osnr >= mod.minimum_osnr + constant.osnr_margin:
+            best_slot = init_slots[best_slot_index]
+            request.path = path
+            request.initial_slot = best_slot
+            request.number_slots = nbslot
+            request.center_frequency = constant.frequency_start \
+                + constant.frequency_slot_bandwidth * best_slot \
+                + constant.frequency_slot_bandwidth * (nbslot / 2.0)
+            request.bandwidth = constant.frequency_slot_bandwidth * nbslot
+            request.launch_power = env.launch_power
+
+            env._provision_path(path, best_slot, nbslot)
+            request.accepted = True
+            env._add_release(request)
+            break
 
 
-
-def greedy_algorithm(env:CustomRMSAEnv, iteration):
+def greedy_algorithm(env:CustomRMSAEnv, func:Callable[[CustomRMSAEnv, Service], None], iteration):
     env._new_service = False
     accepted_count = 0
     return_val = 0
     for i in range(EPISODE_LENGTH):
         # print("Process request", i)
         env._next_service()
-        val = first_fit_heuristic(env, env.current_service)
+        val = func(env, env.current_service)
         return_val += 1 if val else 0
         # first_fit_best_modulation_heuristic(env, env.current_service)
         # first_fit_heuristic_modulation_first(env, env.current_service)
-        print(env.current_service.return_code, env.current_service.failed_gap)
+        # print(env.current_service.return_code, env.current_service.failed_gap)
         if env.current_service.accepted:
             accepted_count += 1
         env._new_service = False
     
-    print(f"[Iteration = {iteration}] Total = {EPISODE_LENGTH} | accepted_count = {accepted_count} | blocking_rate = {float(EPISODE_LENGTH-accepted_count)/EPISODE_LENGTH}")
+    print(f"[Iteration = {iteration}] Total = {EPISODE_LENGTH} | topology: {env.topology_name} | heuristic: {func.__name__} | load: {env.load} | accepted_count = {accepted_count} | blocking_rate = {float(EPISODE_LENGTH-accepted_count)/EPISODE_LENGTH}")
     return accepted_count, return_val
 
-
+heuristic = [random_fit, best_fit]
 topology_data = [dict(file_name='./data/european/european.txt', topology_name='European', sndformat=False, undirected_file=False),\
                  dict(file_name='./data/nsf/nsfnet_chen.txt', topology_name='NSF', sndformat=False, undirected_file=True),\
                  dict(file_name='./data/usa/backbone.txt', topology_name='USA', sndformat=False, undirected_file=False),\
@@ -207,47 +294,48 @@ writer.write(['topology_name', 'load', 'num_request', 'accepted', 'service_block
 
 topology_data = [dict(file_name='./data/germany/sndlib_germany.txt', topology_name='Germany', sndformat=True)]
 loads = [80, 200, 500]
-loads = [200]
+loads = [50]
 
 for arg in topology_data:
     topology = get_topology(**arg, alpha=1)
 
     for load in loads:
 
-        now = datetime.datetime.now()
-        log_filename = now.strftime("Greedy_%Y-%m-%d_%H-%M-%S")+".txt"
-        debug_filename = now.strftime("Greedy_DEBUG_%Y-%m-%d_%H-%M-%S")+".txt"
-        logger = Logger()
-        logger.set_log_file(log_filename, debug_filename, 'log')
+        for func in heuristic:
+            now = datetime.datetime.now()
+            log_filename = now.strftime("Greedy_%Y-%m-%d_%H-%M-%S")+".txt"
+            debug_filename = now.strftime("Greedy_DEBUG_%Y-%m-%d_%H-%M-%S")+".txt"
+            logger = Logger()
+            logger.set_log_file(log_filename, debug_filename, 'log')
 
-        # bitrates = np.arange(25, 101, 5)
+            # bitrates = np.arange(25, 101, 5)
 
-        env_args = dict(
-            topology=topology,
-            seed=SEED,
-            allow_rejection=True,
-            load=load,
-            mean_service_holding_time=MEAN_SERVICE_HOLDING_TIME,
-            episode_length=EPISODE_LENGTH,
-            num_spectrum_resources=300,
-            bit_rates=constant.bit_rates,
-            # bit_rate_probabilities=[0.5, 0.3, 0.2],
-            bit_rate_selection="discrete",
-        )
+            env_args = dict(
+                topology=topology,
+                seed=SEED,
+                allow_rejection=True,
+                load=load,
+                mean_service_holding_time=MEAN_SERVICE_HOLDING_TIME,
+                episode_length=EPISODE_LENGTH,
+                num_spectrum_resources=100,
+                bit_rates=constant.bit_rates,
+                # bit_rate_probabilities=[0.5, 0.3, 0.2],
+                bit_rate_selection="discrete",
+            )
 
-        env = CustomRMSAEnv(**env_args)
-        env.logger=logger
-        
-        print("Run Greedy Heuristic")
-        return_val = []
-        for i in range(2):
-            # print("Iteration", i)
-            nbaccepted, val = greedy_algorithm(env, i)
-            return_val.append(val)
-            sbr = float(EPISODE_LENGTH - nbaccepted)/EPISODE_LENGTH
-            writer.write([arg['topology_name'], load, EPISODE_LENGTH, nbaccepted, sbr])
-            _ = env.customreset(False)
+            env = CustomRMSAEnv(**env_args)
+            env.logger=logger
+            
+            print("Run Greedy Heuristic")
+            return_val = []
+            for i in range(2):
+                # print("Iteration", i)
+                nbaccepted, val = greedy_algorithm(env, func, i)
+                return_val.append(val)
+                sbr = float(EPISODE_LENGTH - nbaccepted)/EPISODE_LENGTH
+                writer.write([arg['topology_name'], load, EPISODE_LENGTH, nbaccepted, sbr])
+                _ = env.customreset(False)
 
-    print("PREV OSNR violated:", return_val)
+        print("PREV OSNR violated:", return_val)
 writer.close()
 

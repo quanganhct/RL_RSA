@@ -1,7 +1,7 @@
 import typing
 from dataclasses import dataclass, field
 from itertools import islice
-from typing import Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union, Dict
 
 import typing
 import networkx as nx
@@ -31,6 +31,7 @@ class Path:
     hops: int
     length: Union[int, float]
     best_modulation: Optional[Modulation] = field(default=None)
+    eligible_best_modulation: Dict[float, Modulation] = field(default=None)
     current_modulation: Optional[Modulation] = field(default=None)
     normalized_length: float = 0
     normalized_num_hops: float = 0

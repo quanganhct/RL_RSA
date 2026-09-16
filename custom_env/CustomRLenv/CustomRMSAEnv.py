@@ -16,8 +16,9 @@ from typing import List
 from custom_env.CustomRLenv.utils import Path, Modulation, Service, spectrum_feature_points, transform_graph
 from env import constant
 from custom_env.CustomRLenv.osnr import compute_ase_nli, compute_min_gap_osnr, compute_max_osnr, check_osnr_constraint_of_running_requests
-from custom_env.CustomRLenv.osnr import compute_ase_nli_vectorized, compute_min_gap_osnr_vectorized
+from custom_env.CustomRLenv.osnr import compute_ase_nli_vectorized, compute_min_gap_osnr_vectorized, compute_osnr_in_empty_spectrum
 from custom_env.CustomRLenv.return_code import FailedCode
+from custom_env.CustomRLenv.utils import modulations
 
 class CustomRMSAEnv(RMSAEnv):
     """
@@ -68,7 +69,36 @@ class CustomRMSAEnv(RMSAEnv):
         self.total_spectrum_usage = 0
         self.count_violating_prev_osnr = 0
         self.min_gap_osnr_all_slot_vector = None
+
+        self.compute_eligible_best_modulation()
         
+
+    def compute_eligible_best_modulation(self):
+        path:Path
+        sorted_modulations = sorted(
+                modulations, key=lambda x: x.spectral_efficiency, reverse=True
+            )
+        
+        for _, paths in self.k_shortest_paths.items():
+            for path in paths:
+                if path.eligible_best_modulation is None:
+                    path.eligible_best_modulation = dict()
+
+                osnr = compute_osnr_in_empty_spectrum(self, path, self.bit_rates, sorted_modulations)
+
+                for i in range(len(self.bit_rates)):
+                    bitrate = self.bit_rates[i]
+                    selected_mod = None
+                    for j in range(len(sorted_modulations)):
+                        mod = sorted_modulations[j]
+                        if mod.spectral_efficiency > path.best_modulation.spectral_efficiency:
+                            continue
+
+                        if osnr[i, j] >= mod.minimum_osnr + constant.osnr_margin:
+                            selected_mod = mod
+                            break
+
+                    path.eligible_best_modulation[bitrate] = selected_mod
 
     def compute_granularity(self):
         granularity = []
